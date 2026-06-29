@@ -20,7 +20,7 @@ export interface DeviceSectionDef {
 export const DEVICE_SECTIONS: DeviceSectionDef[] = [
   {
     type: "links",
-    label: "P2P Links",
+    label: "Links",
     icon: "📡",
     cols: [
       { key: "ssid", label: "SSID" },

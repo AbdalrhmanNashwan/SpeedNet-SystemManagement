@@ -95,7 +95,7 @@ export default function Home() {
       <h2 className="text-lg font-extrabold mt-12 mb-1">Browse by Section</h2>
       <p className="text-muted text-sm mb-4">All devices of a type across every tower.</p>
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        {DEVICE_SECTIONS.map((s) => (
+        {DEVICE_SECTIONS.filter((s) => s.type !== "links").map((s) => (
           <Link key={s.type} to={`/devices/${s.type}`}
             className="card p-5 flex flex-col gap-2 border border-line hover:border-cyan hover:text-cyan transition-colors">
             <span className="text-3xl">{s.icon}</span>

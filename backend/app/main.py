@@ -12,24 +12,27 @@ from app.core.config import settings
 from app.core.limiter import limiter
 import app.models  # noqa: F401  (register models)
 from app.api.router import api_router
-from app.services import monitor
+from app.services import monitor, backup
 
 log = logging.getLogger("uvicorn.error")
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Start the background IP monitor (pings every DB IP, caches up/down status).
-    task: asyncio.Task | None = None
+    # Background workers: IP monitor (ping status) + periodic CSV backups.
+    tasks: list[asyncio.Task] = []
     if settings.MONITOR_ENABLED:
-        task = asyncio.create_task(monitor.run_monitor())
+        tasks.append(asyncio.create_task(monitor.run_monitor()))
+    if settings.BACKUP_ENABLED:
+        tasks.append(asyncio.create_task(backup.run_backup()))
     try:
         yield
     finally:
-        if task:
-            task.cancel()
+        for t in tasks:
+            t.cancel()
+        for t in tasks:
             try:
-                await task
+                await t
             except asyncio.CancelledError:
                 pass
 

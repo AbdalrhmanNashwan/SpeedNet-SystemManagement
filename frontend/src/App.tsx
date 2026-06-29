@@ -34,7 +34,7 @@ function Nav() {
 
   const links = [
     { to: "/towers", label: "Towers" },
-    { to: "/devices/links", label: "P2P" },
+    { to: "/devices/links", label: "Links" },
     { to: "/devices/switches", label: "Switches" },
     { to: "/devices/sectors", label: "Sectors" },
     { to: "/monitor", label: "Monitor" },

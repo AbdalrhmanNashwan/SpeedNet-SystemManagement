@@ -41,6 +41,12 @@ class Settings(BaseSettings):
     # sockets instead. Windows always needs privileged=True.
     MONITOR_PRIVILEGED: bool = True
 
+    # ---- Automatic backups ----
+    BACKUP_ENABLED: bool = True
+    BACKUP_INTERVAL_HOURS: float = 6.0     # how often to dump all tables to CSV
+    BACKUP_DIR: str = "backups"            # where the .zip archives are written
+    BACKUP_RETENTION: int = 28             # keep the newest N archives (28 = ~1 week at 6h)
+
 
 @lru_cache
 def get_settings() -> Settings:
