@@ -1,9 +1,12 @@
-"""Backup management — admin only. List / trigger / download CSV archives."""
-from fastapi import APIRouter, Depends, HTTPException, status
+"""Backup management — admin only. List / trigger / download / restore archives."""
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, status
 from fastapi.responses import FileResponse
 
 from app.core.config import settings
 from app.core.deps import require_role
+from app.crud import audit
+from app.core.deps import get_db
+from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.user import User
 from app.services import backup
 
@@ -27,6 +30,31 @@ async def run_backup_now(admin: User = Depends(require_role("admin"))):
     path = await backup.create_backup()
     backup._prune(settings.BACKUP_RETENTION)
     return {"created": path.name}
+
+
+@router.post("/restore")
+async def restore_backup(confirm: bool = False,
+                         file: UploadFile = File(...),
+                         admin: User = Depends(require_role("admin")),
+                         db: AsyncSession = Depends(get_db)):
+    """Restore all data tables from an uploaded backup .zip (DESTRUCTIVE).
+
+    Wipes and reloads every table in the archive except `users`. Requires
+    `?confirm=true` to guard against accidents.
+    """
+    if not confirm:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST,
+                            "Pass ?confirm=true — this replaces all current data")
+    if not (file.filename or "").endswith(".zip"):
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Upload a backup .zip file")
+    data = await file.read()
+    try:
+        summary = await backup.restore_backup(data)
+    except Exception as exc:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, f"Restore failed: {exc}")
+    await audit.log(db, admin, "restore", "backup", None,
+                    {"file": file.filename, "rows": summary})
+    return {"restored": summary}
 
 
 @router.get("/{name}")

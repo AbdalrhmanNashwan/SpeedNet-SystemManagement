@@ -10,12 +10,13 @@ from __future__ import annotations
 import asyncio
 import csv
 import io
+import json
 import logging
 import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
 
-from sqlalchemy import text
+from sqlalchemy import text, JSON
 
 from app.core.config import settings
 from app.db.base import Base
@@ -26,6 +27,9 @@ log = logging.getLogger("backup")
 
 # Columns we never write to a backup file (secrets that shouldn't sit in CSV).
 _SKIP_COLUMNS = {"hashed_password"}
+# Tables left untouched by restore: users (password hashes aren't in the backup)
+# and alembic's bookkeeping.
+_RESTORE_SKIP_TABLES = {"users", "alembic_version"}
 
 
 def _backup_dir() -> Path:
@@ -58,6 +62,100 @@ async def create_backup() -> Path:
                 zf.writestr(f"{table.name}.csv", buf.getvalue())
     log.info("backup: wrote %s", out.name)
     return out
+
+
+def _coerce(table, row: dict) -> dict:
+    """Turn CSV strings back into typed values for the given table's columns."""
+    out: dict = {}
+    for col in table.columns:
+        if col.name not in row:
+            continue
+        v = row[col.name]
+        if v == "" or v is None:
+            out[col.name] = None
+            continue
+        if isinstance(col.type, JSON):
+            try:
+                out[col.name] = json.loads(v)
+            except Exception:
+                out[col.name] = None
+            continue
+        try:
+            pyt = col.type.python_type
+        except Exception:
+            pyt = str
+        try:
+            if pyt is bool:
+                out[col.name] = str(v).strip().lower() in ("true", "t", "1", "yes")
+            elif pyt is int:
+                out[col.name] = int(v)
+            elif pyt is datetime:
+                out[col.name] = datetime.fromisoformat(v)
+            else:
+                out[col.name] = v
+        except Exception:
+            out[col.name] = v
+    return out
+
+
+async def restore_backup(zip_bytes: bytes) -> dict:
+    """Replace all data tables from the CSVs in an uploaded backup zip.
+
+    DESTRUCTIVE: wipes and reloads every table found in the archive except
+    `users` (whose password hashes aren't in backups) and `alembic_version`.
+    Runs in one transaction, so a failure rolls everything back.
+    """
+    zf = zipfile.ZipFile(io.BytesIO(zip_bytes))
+    names = set(zf.namelist())
+    summary: dict[str, int] = {}
+    # second-pass updates for self-referential FK columns (e.g. towers.parent_id),
+    # which can point at a row inserted later in the same table.
+    deferred: list[tuple] = []   # (table, id_value, {col: value})
+
+    def _self_ref_cols(table) -> set[str]:
+        return {c.name for c in table.columns
+                if any(fk.column.table is table for fk in c.foreign_keys)}
+
+    async with engine.begin() as conn:   # single transaction — all-or-nothing
+        # delete children first (reverse FK order)
+        for table in reversed(Base.metadata.sorted_tables):
+            if table.name in _RESTORE_SKIP_TABLES:
+                continue
+            if f"{table.name}.csv" in names:
+                await conn.execute(table.delete())
+        # insert parents first (FK order)
+        for table in Base.metadata.sorted_tables:
+            if table.name in _RESTORE_SKIP_TABLES:
+                continue
+            csvname = f"{table.name}.csv"
+            if csvname not in names:
+                continue
+            self_cols = _self_ref_cols(table)
+            text_data = zf.read(csvname).decode("utf-8")
+            reader = csv.DictReader(io.StringIO(text_data))
+            rows = []
+            for raw in reader:
+                row = _coerce(table, raw)
+                # null out self-references now; re-apply them after all inserts
+                upd = {c: row[c] for c in self_cols if row.get(c) is not None}
+                if upd and row.get("id") is not None:
+                    deferred.append((table, row["id"], upd))
+                    for c in self_cols:
+                        row[c] = None
+                rows.append(row)
+            if rows:
+                await conn.execute(table.insert(), rows)
+            summary[table.name] = len(rows)
+            if "id" in table.columns:
+                await conn.execute(text(
+                    f"SELECT setval(pg_get_serial_sequence('{table.name}', 'id'), "
+                    f"COALESCE((SELECT MAX(id) FROM {table.name}), 1))"
+                ))
+        # second pass: restore self-referential links now that all rows exist
+        for table, id_value, upd in deferred:
+            await conn.execute(table.update().where(table.c.id == id_value).values(**upd))
+    log.info("restore: reloaded %s", summary)
+    return summary
 
 
 def _prune(retention: int) -> None:
