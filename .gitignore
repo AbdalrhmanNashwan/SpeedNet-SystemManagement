@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+*.egg-info/
+
+# Node / build
+node_modules/
+dist/
+
+# Secrets & environment (NEVER commit)
+.env
+*.env
+!.env.example
+
+# Real network data — contains live device/admin credentials
+data/
+
+# Local backups (pg_dump output)
+backups/
+
+# Local helper with real credentials
+HOW_TO_RUN.md
+
+# Local tooling / editor state
+.claude/
+.vscode/
+.idea/

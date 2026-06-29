@@ -1,0 +1,36 @@
+services:
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    # NOTE: no public port mapping — only the backend (same network) can reach it.
+
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    env_file: .env
+    depends_on:
+      - db
+    # NET_RAW lets the IP monitor send ICMP (ping) packets without full root.
+    cap_add:
+      - NET_RAW
+    # expose only to nginx; do not publish publicly in production
+    ports:
+      - "127.0.0.1:8000:8000"
+
+  frontend:
+    build: ./frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "80:80"
+      # add 443 + certs (Caddy/Let's Encrypt) for production HTTPS
+
+volumes:
+  pgdata:

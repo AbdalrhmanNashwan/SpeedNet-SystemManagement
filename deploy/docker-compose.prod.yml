@@ -1,0 +1,48 @@
+# Production stack: db (no public port) + backend + frontend behind Caddy (HTTPS).
+#
+# Usage (from repo root):
+#   docker compose -f docker-compose.yml -f deploy/docker-compose.prod.yml up -d --build
+#
+# This overlay:
+#   - keeps Postgres on the internal network only (no published port)
+#   - stops publishing the backend/frontend ports directly
+#   - puts Caddy in front for automatic HTTPS (Let's Encrypt)
+#
+# Do NOT also load docker-compose.override.yml in production (it exposes 5432).
+
+services:
+  db:
+    # No `ports:` here — db is reachable only by backend on the internal network.
+    restart: always
+
+  backend:
+    restart: always
+    # Drop the host port publish from the base file; Caddy reaches it internally.
+    ports: []
+    expose:
+      - "8000"
+
+  frontend:
+    restart: always
+    # No longer published directly; Caddy terminates TLS and proxies to it.
+    ports: []
+    expose:
+      - "80"
+
+  caddy:
+    image: caddy:2-alpine
+    restart: always
+    depends_on:
+      - backend
+      - frontend
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  caddy_data:
+  caddy_config:

@@ -1,0 +1,26 @@
+# Caddy reverse proxy with automatic HTTPS via Let's Encrypt.
+#
+# Replace net.speednet.iq with your real domain and make sure the domain's
+# A/AAAA record points at this host. Caddy obtains + renews the certificate
+# automatically on first request — no certbot, no cron.
+#
+# Run with deploy/docker-compose.prod.yml (service `caddy`).
+
+net.speednet.iq {
+	encode gzip
+
+	# API → backend (FastAPI). Backend is only reachable on the internal network.
+	handle /api/* {
+		reverse_proxy backend:8000
+	}
+
+	# Health check passthrough (optional)
+	handle /health {
+		reverse_proxy backend:8000
+	}
+
+	# Everything else → static SPA served by the frontend nginx container.
+	handle {
+		reverse_proxy frontend:80
+	}
+}
