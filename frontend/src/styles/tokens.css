@@ -65,7 +65,7 @@ body{
 /* Scroll-driven wireframe sphere — kept as the site's one piece of ambient
    character, recolored to quiet neutrals with a hint of amber; no glow. */
 .scroll-scene{position:fixed;inset:0;z-index:0;display:flex;align-items:center;justify-content:flex-end;
-  pointer-events:none;perspective:1100px;opacity:.22}
+  pointer-events:none;perspective:1100px;opacity:.55}
 .scroll-orb{width:56vmin;height:56vmin;max-width:560px;max-height:560px;margin-inline-end:-13vmin;
   transform-style:preserve-3d;
   transform:rotateX(14deg) rotateY(calc(var(--scroll,0) * 560deg));
@@ -74,17 +74,17 @@ body{
   animation:sphere-spin 40s linear infinite}
 /* box-shadow:none guards against Tailwind's `.ring` utility (class-name
    collision) which would otherwise paint a 3px blue halo on these spans. */
-.scroll-orb .ring{position:absolute;inset:0;border-radius:50%;border:1px solid var(--line2);box-shadow:none}
+.scroll-orb .ring{position:absolute;inset:0;border-radius:50%;border:1px solid rgba(224,141,60,.45);box-shadow:none}
 .scroll-orb .ring:nth-child(1){transform:rotateY(0)}
 .scroll-orb .ring:nth-child(2){transform:rotateY(36deg)}
 .scroll-orb .ring:nth-child(3){transform:rotateY(72deg)}
 .scroll-orb .ring:nth-child(4){transform:rotateY(108deg)}
 .scroll-orb .ring:nth-child(5){transform:rotateY(144deg)}
-.scroll-orb .ring:nth-child(6){transform:rotateX(90deg);border-color:rgba(224,141,60,.35)}
-.scroll-orb .ring:nth-child(7){transform:rotateX(90deg) translateZ(18vmin) scale(.8);border-color:rgba(224,141,60,.22)}
-.scroll-orb .ring:nth-child(8){transform:rotateX(90deg) translateZ(-18vmin) scale(.8);border-color:rgba(224,141,60,.22)}
+.scroll-orb .ring:nth-child(6){transform:rotateX(90deg);border-color:rgba(224,141,60,.6)}
+.scroll-orb .ring:nth-child(7){transform:rotateX(90deg) translateZ(18vmin) scale(.8);border-color:rgba(224,141,60,.4)}
+.scroll-orb .ring:nth-child(8){transform:rotateX(90deg) translateZ(-18vmin) scale(.8);border-color:rgba(224,141,60,.4)}
 .scroll-orb .core{position:absolute;left:50%;top:50%;width:10%;height:10%;margin:-5% 0 0 -5%;
-  border-radius:50%;background:var(--blue);opacity:.8}
+  border-radius:50%;background:var(--blue);opacity:.9}
 
 /* Device line-art illustrations — gentle float + pulsing signal arcs. */
 @keyframes dev-float{0%,100%{transform:translateY(0)}50%{transform:translateY(-9px)}}
@@ -139,7 +139,7 @@ body{
 @keyframes sphere-spin{from{transform:rotateX(16deg) rotateY(0)}to{transform:rotateX(16deg) rotateY(360deg)}}
 .sphere{position:relative;width:132px;height:132px;transform-style:preserve-3d;
   animation:sphere-spin 30s linear infinite;will-change:transform}
-.sphere .ring{position:absolute;inset:0;border-radius:50%;border:1px solid var(--line2);opacity:.7;box-shadow:none}
+.sphere .ring{position:absolute;inset:0;border-radius:50%;border:1px solid rgba(224,141,60,.5);opacity:.85;box-shadow:none}
 .sphere .ring:nth-child(1){transform:rotateY(0deg)}
 .sphere .ring:nth-child(2){transform:rotateY(45deg)}
 .sphere .ring:nth-child(3){transform:rotateY(90deg)}
