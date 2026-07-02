@@ -12,7 +12,15 @@ export default {
         yellow: "var(--yellow)", orange: "var(--orange)", red: "var(--red)",
         purple: "var(--purple)",
       },
-      borderRadius: { xl2: "18px", xl3: "22px" },
+      fontFamily: {
+        sans: ['"IBM Plex Sans"', '"IBM Plex Sans Arabic"', "Inter", "system-ui", "sans-serif"],
+        mono: ['"IBM Plex Mono"', "ui-monospace", "SFMono-Regular", "Menlo", "monospace"],
+      },
+      // calmer corners: everything converges on the 6–10px range
+      borderRadius: {
+        lg: "6px", xl: "8px", "2xl": "10px", "3xl": "12px",
+        xl2: "10px", xl3: "12px",
+      },
     },
   },
   plugins: [],

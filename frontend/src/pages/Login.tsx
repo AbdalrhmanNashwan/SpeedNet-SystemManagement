@@ -34,7 +34,7 @@ export default function Login() {
       {/* Left panel — branding (desktop only) with animated 3D scene */}
       <div ref={scene}
         className="hidden lg:flex fx-scene flex-col justify-between w-[440px] shrink-0 p-12"
-        style={{ background: "linear-gradient(160deg,#0d1f3c 0%,#071528 100%)", borderRight: "1px solid var(--line)" }}>
+        style={{ background: "var(--panel)", borderRight: "1px solid var(--line)" }}>
         {/* GPU-cheap animated backdrop, layered for pointer-parallax depth */}
         <div className="fx-aurora fx-par fx-par-1" aria-hidden />
         <div className="fx-grid fx-par fx-par-2" aria-hidden />
@@ -53,23 +53,18 @@ export default function Login() {
 
         <div className="relative">
           <div className="flex items-center gap-3 mb-12">
-            <div className="fx-emblem relative w-12 h-12 rounded-2xl bg-cyan/15 border border-cyan/40 flex items-center justify-center"
-              style={{ boxShadow: "0 0 30px rgba(34,211,238,.35)" }}>
+            <div className="fx-emblem relative w-12 h-12 rounded-2xl bg-panel2 border border-line2 flex items-center justify-center">
               <svg width="22" height="22" viewBox="0 0 16 16" fill="none">
-                <circle cx="8" cy="8" r="3" fill="#22d3ee" />
-                <circle cx="8" cy="8" r="6.5" stroke="#22d3ee" strokeWidth="1" opacity=".4" />
-                <circle cx="8" cy="8" r="9" stroke="#22d3ee" strokeWidth="0.5" opacity=".2" />
+                <circle cx="8" cy="8" r="3" fill="var(--blue)" />
+                <circle cx="8" cy="8" r="6.5" stroke="var(--blue)" strokeWidth="1" opacity=".4" />
+                <circle cx="8" cy="8" r="9" stroke="var(--blue)" strokeWidth="0.5" opacity=".2" />
               </svg>
-              <span className="fx-orbit" style={{ left: "50%", top: "50%" }} aria-hidden />
             </div>
             <span className="text-cyan font-extrabold text-2xl tracking-tight">SPEEDNeT</span>
           </div>
-          <h2 className="text-4xl font-extrabold leading-[1.15] text-text mb-4"
-            style={{ textShadow: "0 2px 30px rgba(34,211,238,.25)" }}>
+          <h2 className="text-3xl font-semibold leading-[1.2] text-text mb-4">
             {t("Network")}<br />{t("Management")}<br />
-            <span style={{ background: "linear-gradient(120deg,#22d3ee,#3b82f6)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
-              {t("Console")}
-            </span>
+            <span className="text-cyan">{t("Console")}</span>
           </h2>
           <p className="text-muted text-sm leading-relaxed max-w-[20rem]">
             {t("Monitor and manage your tower network — switches, sectors, links and more — from a single interface.")}
@@ -78,8 +73,8 @@ export default function Login() {
         <div className="relative">
           <div className="grid grid-cols-3 gap-3 mb-8">
             {[["175", "Towers"], ["403", "PTP Links"], ["914", "Sectors"]].map(([n, l]) => (
-              <div key={l} className="glass rounded-2xl px-3 py-3 text-center">
-                <div className="text-cyan font-extrabold text-2xl leading-none">{n}</div>
+              <div key={l} className="bg-panel2 border border-line rounded-xl px-3 py-3 text-center">
+                <div className="text-text font-semibold text-2xl leading-none font-mono">{n}</div>
                 <div className="text-muted2 text-[11px] uppercase tracking-widest mt-1.5">{t(l)}</div>
               </div>
             ))}
@@ -147,8 +142,8 @@ export default function Login() {
 
             <button
               type="submit" disabled={loading}
-              className="w-full mt-2 py-3 rounded-xl font-bold text-sm transition-all disabled:opacity-50"
-              style={{ background: loading ? "var(--blue)" : "linear-gradient(135deg,#3b82f6,#22d3ee)", color: "#fff" }}
+              className="w-full mt-2 py-3 rounded-xl font-semibold text-sm transition-all disabled:opacity-50"
+              style={{ background: "var(--blue)", color: "#fff" }}
             >
               {loading ? (
                 <span className="flex items-center justify-center gap-2">

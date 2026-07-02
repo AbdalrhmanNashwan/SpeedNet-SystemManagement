@@ -1,6 +1,12 @@
+@import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Sans+Arabic:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap");
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Weight discipline: hierarchy comes from 400/500/600 only — heavy weights
+   used across older components are clamped to semibold. */
+.font-bold, .font-extrabold, .font-black, b, strong { font-weight: 600; }
 
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(6px); }

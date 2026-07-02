@@ -1,42 +1,39 @@
-/* SPEEDNeT design system — navy/cyan dark theme.
-   Single source of truth for color; Tailwind reads these via tailwind.config.js. */
+/* SPEEDNeT design system — warm graphite + copper/amber accent.
+   Single source of truth for color; Tailwind reads these via tailwind.config.js.
+   Principles: flat surfaces separated by 1px hairline borders (no glows, no
+   gradients, no glass), one accent used sparingly, semantic status colors only. */
 :root{
   color-scheme: dark;
-  --bg:#07101f; --bg2:#0b1628; --panel:#101d31; --panel2:#15243a; --panel3:#1a2c46;
-  --line:#263954; --line2:#304867; --text:#f4f8ff; --muted:#91a4be; --muted2:#627793;
-  --blue:#3b82f6; --cyan:#22d3ee; --green:#34d399; --yellow:#fbbf24; --orange:#fb923c;
-  --red:#fb7185; --purple:#a78bfa;
-  --shadow:0 18px 50px rgba(0,0,0,.28); --radius:18px;
+  --bg:#101113; --bg2:#141518; --panel:#18191C; --panel2:#1F2023; --panel3:#232427;
+  --line:#2C2E33; --line2:#3A3C42; --text:#F5F4F2; --muted:#A0A1A6; --muted2:#6B6C71;
+  /* --blue/--cyan kept as token names (components reference them) but both now
+     point at the single brand accent: warm copper/amber. */
+  --blue:#E08D3C; --cyan:#E08D3C; --green:#34D399; --yellow:#94A3B8; --orange:#E08D3C;
+  --red:#F87171; --purple:#A78BFA;
+  --shadow:0 8px 24px rgba(0,0,0,.35); --radius:8px;
 }
 /* Light theme — overrides the tokens above when <html data-theme="light"> */
 :root[data-theme="light"]{
   color-scheme: light;
-  --bg:#eef2f8; --bg2:#ffffff; --panel:#ffffff; --panel2:#f1f5fb; --panel3:#e7eef7;
-  --line:#d6dfeb; --line2:#c2cedd; --text:#0d1b2e; --muted:#52617a; --muted2:#8493ab;
-  --blue:#2563eb; --cyan:#0891b2; --green:#059669; --yellow:#d97706; --orange:#ea580c;
-  --red:#e11d48; --purple:#7c3aed;
-  --shadow:0 18px 50px rgba(20,40,80,.12);
+  --bg:#F7F6F4; --bg2:#FBFAF9; --panel:#FFFFFF; --panel2:#F2F1EE; --panel3:#ECEAE6;
+  --line:#E3E1DD; --line2:#D2CFC9; --text:#17181B; --muted:#6B6C71; --muted2:#8E8F94;
+  --blue:#C97427; --cyan:#C97427; --green:#0FA968; --yellow:#7C8794; --orange:#C97427;
+  --red:#DC5050; --purple:#7C5CD6;
+  --shadow:0 8px 24px rgba(30,30,30,.10);
 }
 *{box-sizing:border-box;margin:0;padding:0}
 body{
-  min-height:100vh;color:var(--text);
-  font-family:Inter,system-ui,-apple-system,"Segoe UI",sans-serif;
+  min-height:100vh;color:var(--text);background:var(--bg);
+  font-family:"IBM Plex Sans",Inter,system-ui,-apple-system,"Segoe UI",sans-serif;
+  font-size:14px;
   transition:background-color .35s ease,color .35s ease;
-  background:
-    radial-gradient(circle at 12% 0%,rgba(59,130,246,.16),transparent 30%),
-    radial-gradient(circle at 88% 8%,rgba(34,211,238,.10),transparent 28%),var(--bg);
 }
-:root[data-theme="light"] body{
-  background:
-    radial-gradient(circle at 12% 0%,rgba(37,99,235,.10),transparent 30%),
-    radial-gradient(circle at 88% 8%,rgba(8,145,178,.07),transparent 28%),var(--bg);
-}
+
 /* ============================================================
-   Public corporate site (/site) — full-screen "Reels" panels.
-   Scroll-snap gives the snap-into-place feel; each panel's content
-   does a dramatic scale+blur reveal driven by IntersectionObserver
-   (re-triggers on every entry). All motion is GPU CSS — no images,
-   no library — so it stays fast on slow connections.
+   Public corporate site (/) — full-screen scroll sections.
+   Interaction pattern preserved (scroll-snap + reveal + side dots),
+   restyled: calm fades instead of blur/scale drama, amber accents,
+   no glows.
    ============================================================ */
 .site-reels{height:100vh;height:100dvh;overflow-y:auto;overflow-x:hidden;
   scroll-snap-type:y mandatory;scroll-behavior:smooth;scrollbar-width:none}
@@ -45,11 +42,11 @@ body{
   position:relative;z-index:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
   text-align:center;overflow:hidden;padding:6rem 1.25rem 4rem}
 
-/* dramatic reveal — bigger move, scale and blur, re-triggers each entry */
-.reveal{opacity:0;transform:translateY(46px) scale(.92);filter:blur(10px);
-  transition:opacity .8s ease,transform 1s cubic-bezier(.16,.84,.3,1),filter .8s ease;
-  will-change:opacity,transform,filter}
-.reveal.is-visible{opacity:1;transform:none;filter:none}
+/* quiet reveal — small rise + fade, re-triggers each entry */
+.reveal{opacity:0;transform:translateY(18px);
+  transition:opacity .6s ease,transform .7s cubic-bezier(.16,.84,.3,1);
+  will-change:opacity,transform}
+.reveal.is-visible{opacity:1;transform:none}
 
 /* bouncing scroll-down hint */
 @keyframes reels-bounce{0%,100%{transform:translateY(0);opacity:.5}50%{transform:translateY(8px);opacity:1}}
@@ -58,41 +55,38 @@ body{
 /* right-side panel dots */
 .reels-dots{position:fixed;top:50%;inset-inline-end:18px;transform:translateY(-50%);
   z-index:40;display:flex;flex-direction:column;gap:12px}
-.reels-dots button{width:9px;height:9px;border-radius:50%;border:0;cursor:pointer;padding:0;
+.reels-dots button{width:8px;height:8px;border-radius:50%;border:0;cursor:pointer;padding:0;
   background:var(--line2);transition:transform .25s,background .25s}
-.reels-dots button.active{background:var(--cyan);transform:scale(1.5);box-shadow:0 0 10px var(--cyan)}
+.reels-dots button.active{background:var(--blue);transform:scale(1.4)}
 
-.site-hero-text{background:linear-gradient(120deg,#22d3ee,#3b82f6);
-  -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;color:transparent}
+/* hero headline accent — solid accent color, no gradient text */
+.site-hero-text{color:var(--blue)}
 
-/* Scroll-driven 3D network sphere — a fixed object behind every panel that
-   rotates with scroll progress (--scroll set by the scroll handler), so moving
-   between panels visibly turns it and ties the whole story together. Anchored
-   to the inline-end side (flips with RTL) and partly off-edge so it stays an
-   ambient backdrop, not under the text. Pure CSS. */
+/* Scroll-driven wireframe sphere — kept as the site's one piece of ambient
+   character, recolored to quiet neutrals with a hint of amber; no glow. */
 .scroll-scene{position:fixed;inset:0;z-index:0;display:flex;align-items:center;justify-content:flex-end;
-  pointer-events:none;perspective:1100px;opacity:.4}
+  pointer-events:none;perspective:1100px;opacity:.22}
 .scroll-orb{width:56vmin;height:56vmin;max-width:560px;max-height:560px;margin-inline-end:-13vmin;
   transform-style:preserve-3d;
   transform:rotateX(14deg) rotateY(calc(var(--scroll,0) * 560deg));
   transition:transform .25s linear;will-change:transform}
 .scroll-orb-inner{position:absolute;inset:0;transform-style:preserve-3d;
-  animation:sphere-spin 28s linear infinite}
-.scroll-orb .ring{position:absolute;inset:0;border-radius:50%;border:1px solid rgba(34,211,238,.35)}
+  animation:sphere-spin 40s linear infinite}
+/* box-shadow:none guards against Tailwind's `.ring` utility (class-name
+   collision) which would otherwise paint a 3px blue halo on these spans. */
+.scroll-orb .ring{position:absolute;inset:0;border-radius:50%;border:1px solid var(--line2);box-shadow:none}
 .scroll-orb .ring:nth-child(1){transform:rotateY(0)}
 .scroll-orb .ring:nth-child(2){transform:rotateY(36deg)}
 .scroll-orb .ring:nth-child(3){transform:rotateY(72deg)}
 .scroll-orb .ring:nth-child(4){transform:rotateY(108deg)}
 .scroll-orb .ring:nth-child(5){transform:rotateY(144deg)}
-.scroll-orb .ring:nth-child(6){transform:rotateX(90deg);border-color:rgba(59,130,246,.3)}
-.scroll-orb .ring:nth-child(7){transform:rotateX(90deg) translateZ(18vmin) scale(.8);border-color:rgba(59,130,246,.22)}
-.scroll-orb .ring:nth-child(8){transform:rotateX(90deg) translateZ(-18vmin) scale(.8);border-color:rgba(59,130,246,.22)}
-.scroll-orb .core{position:absolute;left:50%;top:50%;width:13%;height:13%;margin:-6.5% 0 0 -6.5%;
-  border-radius:50%;background:radial-gradient(circle,#fff,var(--cyan) 55%,transparent 72%);
-  box-shadow:0 0 44px var(--cyan),0 0 90px rgba(34,211,238,.5);animation:core-pulse 4s ease-in-out infinite}
+.scroll-orb .ring:nth-child(6){transform:rotateX(90deg);border-color:rgba(224,141,60,.35)}
+.scroll-orb .ring:nth-child(7){transform:rotateX(90deg) translateZ(18vmin) scale(.8);border-color:rgba(224,141,60,.22)}
+.scroll-orb .ring:nth-child(8){transform:rotateX(90deg) translateZ(-18vmin) scale(.8);border-color:rgba(224,141,60,.22)}
+.scroll-orb .core{position:absolute;left:50%;top:50%;width:10%;height:10%;margin:-5% 0 0 -5%;
+  border-radius:50%;background:var(--blue);opacity:.8}
 
-/* Device line-art illustrations (rooftop unit, dish, sector, tower…) — gentle
-   float + pulsing signal arcs. SVG line-art: tiny, crisp, fast on any link. */
+/* Device line-art illustrations — gentle float + pulsing signal arcs. */
 @keyframes dev-float{0%,100%{transform:translateY(0)}50%{transform:translateY(-9px)}}
 .dev-float{animation:dev-float 5.5s ease-in-out infinite}
 @keyframes dev-wave{0%,100%{opacity:.12}50%{opacity:.95}}
@@ -105,10 +99,10 @@ body{
 @media (prefers-reduced-motion:reduce){.sig-bar{animation:none}}
 
 @media (prefers-reduced-motion:reduce){
-  .reveal{opacity:1;transform:none;filter:none;transition:none}
+  .reveal{opacity:1;transform:none;transition:none}
   .site-reels{scroll-snap-type:none;scroll-behavior:auto}
   .reels-hint{animation:none}
-  .scroll-orb-inner,.scroll-orb .core{animation:none}
+  .scroll-orb-inner{animation:none}
   .scroll-orb{transition:none}
   .dev-float,.dev-wave{animation:none}
   .dev-wave{opacity:.7}
@@ -119,113 +113,44 @@ body{
   transition:background-color .35s ease,border-color .35s ease,
              color .35s ease,fill .35s ease !important;
 }
+
 /* Reusable primitives — components compose these + Tailwind utilities. */
 .card{position:relative;overflow:hidden;border:1px solid var(--line);
-  background:linear-gradient(145deg,var(--panel),var(--bg2));border-radius:var(--radius);
-  transition:transform .16s,border-color .16s,box-shadow .16s}
-.card:hover{transform:translateY(-3px);border-color:var(--blue);box-shadow:0 14px 28px rgba(0,0,0,.22)}
-.status{display:inline-flex;align-items:center;gap:5px;font-size:10px;font-weight:800;
+  background:var(--panel);border-radius:var(--radius);
+  transition:border-color .16s}
+.card:hover{border-color:var(--line2)}
+.status{display:inline-flex;align-items:center;gap:5px;font-size:10px;font-weight:600;
   padding:3px 8px;border-radius:999px;border:1px solid transparent}
 .status:before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor}
 
-/* ============================================================
-   Stunning FX — desktop-only, GPU-cheap (transform/opacity only).
-   No JS, no extra assets; everything composites on the GPU so the
-   render thread and bundle size are untouched.
-   ============================================================ */
-@keyframes fx-float{0%,100%{transform:translateY(0)}50%{transform:translateY(-12px)}}
-@keyframes fx-drift1{0%,100%{transform:translate(0,0) scale(1)}50%{transform:translate(38px,-28px) scale(1.15)}}
-@keyframes fx-drift2{0%,100%{transform:translate(0,0) scale(1.1)}50%{transform:translate(-46px,24px) scale(.92)}}
-@keyframes fx-grid{0%{background-position:0 0}100%{background-position:0 60px}}
-@keyframes fx-sheen{0%{transform:translateX(-130%) skewX(-18deg)}100%{transform:translateX(230%) skewX(-18deg)}}
-@keyframes fx-orbit{0%{transform:rotate(0) translateX(46px) rotate(0)}100%{transform:rotate(360deg) translateX(46px) rotate(-360deg)}}
-
+/* Legacy effect classes, neutralized. The old theme's tilt/halo/glass/aurora
+   treatments are intentionally flattened: surfaces stay still and are separated
+   by borders, not motion or glow. Classes remain so JSX doesn't need editing. */
+.tilt{transition:border-color .16s}
+.halo{position:relative}
+.glass{background:var(--panel);border:1px solid var(--line)}
 .fx-scene{position:relative;overflow:hidden;isolation:isolate}
-/* soft drifting aurora blobs */
-.fx-aurora{position:absolute;inset:0;z-index:-1;pointer-events:none;overflow:hidden}
-.fx-aurora::before,.fx-aurora::after{content:"";position:absolute;border-radius:50%;
-  filter:blur(64px);opacity:.5;will-change:transform}
-.fx-aurora::before{width:360px;height:360px;left:-70px;top:-50px;
-  background:radial-gradient(circle,var(--blue),transparent 70%);animation:fx-drift1 15s ease-in-out infinite}
-.fx-aurora::after{width:420px;height:420px;right:-90px;bottom:-70px;
-  background:radial-gradient(circle,var(--cyan),transparent 70%);animation:fx-drift2 19s ease-in-out infinite}
-/* receding 3D perspective grid floor */
-.fx-grid{position:absolute;left:0;right:0;bottom:0;height:60%;z-index:-1;pointer-events:none;
-  perspective:320px;perspective-origin:50% 0;opacity:.3}
-.fx-grid::before{content:"";position:absolute;inset:-60% -50% -10% -50%;
-  background-image:linear-gradient(var(--cyan) 1px,transparent 1px),
-                  linear-gradient(90deg,var(--cyan) 1px,transparent 1px);
-  background-size:60px 60px;transform:rotateX(72deg);transform-origin:50% 100%;
-  animation:fx-grid 3.2s linear infinite;
-  -webkit-mask-image:linear-gradient(transparent,#000 78%);mask-image:linear-gradient(transparent,#000 78%)}
-/* gently floating 3D emblem + orbiting node */
-.fx-emblem{animation:fx-float 6s ease-in-out infinite;will-change:transform}
-.fx-orbit{position:absolute;width:7px;height:7px;border-radius:50%;background:var(--cyan);
-  box-shadow:0 0 10px var(--cyan);animation:fx-orbit 9s linear infinite}
-/* frosted glass surface */
-.glass{background:rgba(255,255,255,.045);backdrop-filter:blur(12px);
-  -webkit-backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,.09)}
-/* 3D tilt-on-hover with a sheen sweep (desktop only) */
-.tilt{transition:transform .28s cubic-bezier(.2,.7,.2,1),box-shadow .28s,border-color .2s}
-@media (min-width:1024px){
-  .tilt:hover{transform:perspective(900px) rotateX(6deg) rotateY(-7deg) translateY(-6px) scale(1.04);
-    box-shadow:0 26px 52px rgba(0,0,0,.42)}
-  .tilt::after{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;z-index:1;
-    background:linear-gradient(115deg,transparent 32%,rgba(255,255,255,.14) 50%,transparent 68%);
-    transform:translateX(-130%) skewX(-18deg);opacity:0}
-  .tilt:hover::after{animation:fx-sheen .85s ease forwards;opacity:1}
-}
-/* ---- pointer parallax: layers read --mx/--my (-1..1) set by a tiny rAF handler ---- */
-.fx-par{transition:transform .25s ease-out;will-change:transform}
-.fx-par-1{transform:translate3d(calc(var(--mx,0)*  8px),calc(var(--my,0)*  8px),0)}
-.fx-par-2{transform:translate3d(calc(var(--mx,0)* 18px),calc(var(--my,0)* 14px),0)}
-.fx-par-3{transform:translate3d(calc(var(--mx,0)* 30px),calc(var(--my,0)* 22px),0)}
+.fx-aurora,.fx-grid,.fx-particles{display:none}
+.fx-emblem{}
+.fx-orbit{display:none}
+.fx-par,.fx-par-1,.fx-par-2,.fx-par-3{transform:none;transition:none}
 
-/* ---- CSS 3D wireframe network sphere (charming centrepiece, pure transforms) ---- */
+/* wireframe sphere (login/site emblem) — quiet neutral rings, no glow */
 @keyframes sphere-spin{from{transform:rotateX(16deg) rotateY(0)}to{transform:rotateX(16deg) rotateY(360deg)}}
-@keyframes core-pulse{0%,100%{transform:scale(1);opacity:.9}50%{transform:scale(1.25);opacity:1}}
 .sphere{position:relative;width:132px;height:132px;transform-style:preserve-3d;
-  animation:sphere-spin 16s linear infinite;will-change:transform}
-.sphere .ring{position:absolute;inset:0;border-radius:50%;border:1px solid var(--cyan);
-  opacity:.45;box-shadow:0 0 14px rgba(34,211,238,.25) inset}
+  animation:sphere-spin 30s linear infinite;will-change:transform}
+.sphere .ring{position:absolute;inset:0;border-radius:50%;border:1px solid var(--line2);opacity:.7;box-shadow:none}
 .sphere .ring:nth-child(1){transform:rotateY(0deg)}
 .sphere .ring:nth-child(2){transform:rotateY(45deg)}
 .sphere .ring:nth-child(3){transform:rotateY(90deg)}
 .sphere .ring:nth-child(4){transform:rotateY(135deg)}
-.sphere .ring:nth-child(5){transform:rotateX(90deg);border-color:var(--blue);opacity:.35}
-.sphere .ring:nth-child(6){transform:rotateX(90deg) translateZ(34px) scale(.78);border-color:var(--blue);opacity:.25}
-.sphere .ring:nth-child(7){transform:rotateX(90deg) translateZ(-34px) scale(.78);border-color:var(--blue);opacity:.25}
-.sphere .core{position:absolute;left:50%;top:50%;width:20px;height:20px;margin:-10px;border-radius:50%;
-  background:radial-gradient(circle,#fff,var(--cyan) 55%,transparent 75%);
-  box-shadow:0 0 22px var(--cyan),0 0 44px rgba(34,211,238,.55);animation:core-pulse 3.4s ease-in-out infinite}
+.sphere .ring:nth-child(5){transform:rotateX(90deg);border-color:rgba(224,141,60,.45);opacity:.6}
+.sphere .ring:nth-child(6){transform:rotateX(90deg) translateZ(34px) scale(.78);border-color:rgba(224,141,60,.3);opacity:.5}
+.sphere .ring:nth-child(7){transform:rotateX(90deg) translateZ(-34px) scale(.78);border-color:rgba(224,141,60,.3);opacity:.5}
+.sphere .core{position:absolute;left:50%;top:50%;width:16px;height:16px;margin:-8px;border-radius:50%;
+  background:var(--blue);opacity:.85}
 
-/* ---- drifting particles (a few GPU dots, no JS) ---- */
-@keyframes particle{0%{transform:translateY(0);opacity:0}10%{opacity:.8}90%{opacity:.8}100%{transform:translateY(-150px);opacity:0}}
-.fx-particles{position:absolute;inset:0;z-index:-1;pointer-events:none;overflow:hidden}
-.fx-particles i{position:absolute;bottom:-8px;width:4px;height:4px;border-radius:50%;
-  background:var(--cyan);box-shadow:0 0 8px var(--cyan);animation:particle linear infinite}
-.fx-particles i:nth-child(1){left:12%;animation-duration:9s;animation-delay:0s}
-.fx-particles i:nth-child(2){left:28%;animation-duration:12s;animation-delay:1.5s;background:var(--blue);box-shadow:0 0 8px var(--blue)}
-.fx-particles i:nth-child(3){left:44%;animation-duration:8s;animation-delay:3s}
-.fx-particles i:nth-child(4){left:61%;animation-duration:13s;animation-delay:.8s;background:var(--blue);box-shadow:0 0 8px var(--blue)}
-.fx-particles i:nth-child(5){left:76%;animation-duration:10s;animation-delay:2.2s}
-.fx-particles i:nth-child(6){left:90%;animation-duration:11s;animation-delay:4s}
-
-/* ---- animated gradient halo on hover (cards) ---- */
-@keyframes halo-spin{to{transform:rotate(360deg)}}
-.halo{position:relative}
-@media (min-width:1024px){
-  .halo::before{content:"";position:absolute;inset:-1px;border-radius:inherit;padding:1px;z-index:0;
-    background:conic-gradient(from 0deg,transparent,var(--cyan),transparent 40%,var(--blue),transparent 70%);
-    -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
-    -webkit-mask-composite:xor;mask-composite:exclude;opacity:0;transition:opacity .3s}
-  .halo:hover::before{opacity:.9;animation:halo-spin 4s linear infinite}
-}
-
-/* keep the heavy stuff off phones/tablets entirely */
-@media (max-width:1023px){.fx-aurora,.fx-grid,.fx-orbit,.fx-particles,.sphere{display:none}}
+@media (max-width:1023px){.sphere{display:none}}
 @media (prefers-reduced-motion:reduce){
-  .fx-aurora::before,.fx-aurora::after,.fx-grid::before,.fx-emblem,.fx-orbit,
-  .sphere,.sphere .core,.fx-particles i,.tilt:hover::after,.halo:hover::before{animation:none}
-  .fx-par{transition:none}
+  .sphere{animation:none}
 }

@@ -44,26 +44,19 @@ export default function Home() {
 
   return (
     <main className="max-w-5xl mx-auto px-4 sm:px-6 py-10">
-      <div className="relative overflow-hidden rounded-[22px] px-6 sm:px-8 py-7 sm:py-9 mb-8 flex items-center gap-4 border border-line"
-        style={{ background: "linear-gradient(110deg,var(--panel) 0%,var(--bg2) 55%,var(--panel) 100%)" }}>
-        {/* distinct, static accent: a soft corner glow + a thin gradient edge */}
-        <div aria-hidden className="absolute inset-0 pointer-events-none"
-          style={{ background: "radial-gradient(420px circle at 100% 0%,rgba(34,211,238,.12),transparent 60%)" }} />
-        <div aria-hidden className="absolute left-0 top-0 bottom-0 w-1"
-          style={{ background: "linear-gradient(180deg,#22d3ee,#3b82f6)" }} />
+      <div className="relative overflow-hidden rounded-xl px-6 sm:px-8 py-6 sm:py-7 mb-8 flex items-center gap-4 border border-line bg-panel">
+        {/* single restrained accent: a thin brand-color edge */}
+        <div aria-hidden className="absolute start-0 top-0 bottom-0 w-[3px] bg-blue" />
         <div className="relative">
-          <p className="text-cyan text-[11px] font-bold uppercase tracking-[0.25em] mb-2">{t("SPEEDNeT Console")}</p>
-          <h1 className="text-3xl sm:text-4xl font-extrabold mb-1.5">
-            {t("Network")}{" "}
-            <span style={{ background: "linear-gradient(120deg,#22d3ee,#3b82f6)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
-              {t("Zones")}
-            </span>
+          <p className="text-muted2 text-[11px] font-medium uppercase tracking-[0.2em] mb-2">{t("SPEEDNeT Console")}</p>
+          <h1 className="text-2xl font-semibold mb-1.5">
+            {t("Network")} <span className="text-cyan">{t("Zones")}</span>
           </h1>
           <p className="text-muted text-sm">{t("Select a zone to view its towers and backbone links.")}</p>
         </div>
         {canAddZone && (
           <button onClick={() => setDialog({ open: true, zone: null })}
-            className="relative ms-auto bg-blue text-white text-sm font-bold px-4 py-1.5 rounded-lg hover:bg-blue/80">
+            className="relative ms-auto bg-blue text-white text-sm font-medium px-4 py-1.5 rounded-lg hover:bg-blue/85">
             {t("+ Add Zone")}
           </button>
         )}

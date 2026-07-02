@@ -3,12 +3,11 @@ import { useT } from "@/i18n";
 import { Reveal } from "./reveal";
 import { OutdoorUnit, DishAntenna, SectorAntenna, Tower } from "./devices";
 
-/** Soft per-panel color glow (varies the mood as you scroll). */
-function Glow({ color, at }: { color: string; at: string }) {
-  return (
-    <div aria-hidden className="absolute inset-0 -z-10 pointer-events-none"
-      style={{ background: `radial-gradient(60vw 60vh at ${at}, ${color}, transparent 70%)` }} />
-  );
+/** Previously a per-panel radial color glow; the redesign keeps surfaces flat,
+    so this renders nothing. Kept so panel markup stays unchanged (and the old
+    look can be restored from the checkpoint commit). */
+function Glow(_props: { color: string; at: string }) {
+  return null;
 }
 
 /** Simple line icons (Feather-style) for the contact cards — no emoji. */
@@ -117,7 +116,7 @@ export default function SiteLanding() {
         <Reveal delay={260}>
           <div className="flex flex-wrap items-center justify-center gap-3">
             <a href="#contact" className="px-7 py-3 rounded-xl font-bold text-sm text-white"
-              style={{ background: "linear-gradient(135deg,#3b82f6,#22d3ee)" }}>
+              style={{ background: "var(--blue)" }}>
               {t("Get connected")}
             </a>
             <a href="#speed" className="px-7 py-3 rounded-xl font-bold text-sm border border-line2 text-text hover:border-cyan transition-colors">
@@ -241,7 +240,7 @@ export default function SiteLanding() {
         </Reveal>
         <Reveal delay={320}>
           <a href="#home" className="px-7 py-3 rounded-xl font-bold text-sm text-white"
-            style={{ background: "linear-gradient(135deg,#3b82f6,#22d3ee)" }}>
+            style={{ background: "var(--blue)" }}>
             {t("Back to top")}
           </a>
         </Reveal>
