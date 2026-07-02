@@ -57,12 +57,27 @@ async def restore_backup(confirm: bool = False,
     return {"restored": summary}
 
 
-@router.get("/{name}")
-async def download_backup(name: str, admin: User = Depends(require_role("admin"))):
-    """Download a specific archive (name must match backup_*.zip)."""
+def _archive_or_error(name: str):
+    """Validate an archive name (backup_*.zip, no path parts) and return its path."""
     if not name.startswith("backup_") or not name.endswith(".zip") or "/" in name or "\\" in name:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Invalid backup name")
     path = backup._backup_dir() / name
     if not path.exists():
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Backup not found")
+    return path
+
+
+@router.get("/download")
+async def download_backup_by_query(name: str, admin: User = Depends(require_role("admin"))):
+    """Download an archive via ?name=... — the URL path carries no .zip suffix,
+    which keeps ad/download-blocker browser extensions from eating the request
+    (they blank out XHRs whose path ends in .zip). Registered before /{name}."""
+    path = _archive_or_error(name)
+    return FileResponse(path, media_type="application/zip", filename=name)
+
+
+@router.get("/{name}")
+async def download_backup(name: str, admin: User = Depends(require_role("admin"))):
+    """Download a specific archive (name must match backup_*.zip)."""
+    path = _archive_or_error(name)
     return FileResponse(path, media_type="application/zip", filename=name)

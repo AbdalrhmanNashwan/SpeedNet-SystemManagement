@@ -59,13 +59,18 @@ export default function Backups() {
 
   const download = async (name: string) => {
     try {
-      const res = await api.get(`/backups/${name}`, { responseType: "blob" });
+      // name goes in the query string, not the path: ad-blocker extensions
+      // silently blank out XHRs whose URL path ends in ".zip"
+      const res = await api.get("/backups/download", {
+        params: { name }, responseType: "blob",
+      });
       const url = URL.createObjectURL(res.data as Blob);
       const a = document.createElement("a");
       a.href = url;
       a.download = name;
       a.click();
-      URL.revokeObjectURL(url);
+      // delay revocation so the browser has started the download
+      setTimeout(() => URL.revokeObjectURL(url), 10_000);
     } catch {
       toast.error(t("Download failed"));
     }
