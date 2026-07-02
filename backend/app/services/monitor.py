@@ -209,6 +209,17 @@ async def _ping_batch(addresses: list[str]) -> None:
         }
 
 
+# Serialize on-demand checks: overlapping raw-ICMP pings contend for the socket
+# (and trip OS ICMP rate-limiting), which is exactly what made spamming the
+# re-ping button drop packets and report a healthy host as "down".
+_check_lock = asyncio.Lock()
+# Per-IP throttle: a forced re-check inside this window just returns the last
+# result instead of launching another ping, so mashing the button can't queue a
+# pile-up of pings that time out and report false "down".
+_FORCED_MIN_INTERVAL = 3.0          # seconds
+_last_forced: dict[str, float] = {}
+
+
 async def check_ip(raw: str) -> dict | None:
     """Ping a single IP right now and merge the result into the cache.
 
@@ -220,14 +231,33 @@ async def check_ip(raw: str) -> dict | None:
         ipaddress.ip_address(ip)
     except ValueError:
         return None
+
+    # Throttle spam: if this IP was just checked, return the cached result.
+    now = time.monotonic()
+    if now - _last_forced.get(ip, 0.0) < _FORCED_MIN_INTERVAL and ip in state.results:
+        return state.results[ip]
+    _last_forced[ip] = now
+
     from icmplib import async_ping
 
-    host = await async_ping(
-        ip,
-        count=settings.MONITOR_COUNT,
-        timeout=settings.MONITOR_TIMEOUT,
-        privileged=settings.MONITOR_PRIVILEGED,
-    )
+    async with _check_lock:
+        host = await async_ping(
+            ip,
+            count=settings.MONITOR_COUNT,
+            timeout=settings.MONITOR_TIMEOUT,
+            privileged=settings.MONITOR_PRIVILEGED,
+        )
+        # A single dropped echo must not flip an IP to "down" — that's what let
+        # rapid clicks spam false reds. Confirm an apparent failure with a short
+        # multi-packet burst before believing it.
+        if not host.is_alive:
+            host = await async_ping(
+                ip,
+                count=max(3, settings.MONITOR_COUNT),
+                interval=0.2,
+                timeout=settings.MONITOR_TIMEOUT,
+                privileged=settings.MONITOR_PRIVILEGED,
+            )
     refs = state.refs.get(ip) or state.results.get(ip, {}).get("refs", [])
     result = {
         "ip": ip,
@@ -275,6 +305,8 @@ async def run_monitor() -> None:
                 if state.refs:
                     await _sweep()
                     state.error = None
+                    from app.services.alerts import manager as alert_manager
+                    await alert_manager.process_sweep(state.results)
                 else:
                     await asyncio.sleep(settings.MONITOR_CYCLE_GAP)
             except asyncio.CancelledError:

@@ -2,7 +2,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.deps import get_db, get_current_user, require_role
+from app.core.deps import get_db, get_current_user, require_capability
 from app.crud.base import CRUDBase
 from app.crud import audit
 from app.models.tower import Tower
@@ -14,8 +14,9 @@ crud = CRUDBase(Tower)
 
 
 def _check_scope(user: User, tower: Tower):
-    """Agents may only touch towers in their zone."""
-    if user.role == "agent" and tower.zone_id != user.zone_id:
+    """Agents may only touch towers in their zone. An agent with no zone
+    assigned has no scope at all — deny, don't fall through to "everything"."""
+    if user.role == "agent" and (user.zone_id is None or tower.zone_id != user.zone_id):
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Outside your zone")
 
 
@@ -24,8 +25,11 @@ async def list_towers(zone_id: int | None = None, area: str | None = None,
                       reseller: str | None = None, status_: str | None = None,
                       db: AsyncSession = Depends(get_db),
                       user: User = Depends(get_current_user)):
-    # agents are scoped to their own zone (read + write)
+    # agents are scoped to their own zone (read + write); an agent with no
+    # zone assigned sees nothing (crud.list skips None filters, so guard here)
     if user.role == "agent":
+        if user.zone_id is None:
+            return []
         zone_id = user.zone_id
     return await crud.list(db, zone_id=zone_id, area=area, reseller=reseller, status=status_)
 
@@ -42,15 +46,23 @@ async def get_tower(tower_id: int, db: AsyncSession = Depends(get_db),
 
 @router.post("", response_model=TowerOut, status_code=201)
 async def create_tower(data: TowerCreate, db: AsyncSession = Depends(get_db),
-                       user: User = Depends(require_role("editor"))):
-    obj = await crud.create(db, data.model_dump())
-    await audit.log(db, user, "create", "tower", obj.id, data.model_dump())
+                       user: User = Depends(require_capability("create"))):
+    payload = data.model_dump()
+    # an agent may only create towers inside their own zone
+    if user.role == "agent":
+        if user.zone_id is None:
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "Outside your zone")
+        if payload.get("zone_id") not in (None, user.zone_id):
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "Outside your zone")
+        payload["zone_id"] = user.zone_id
+    obj = await crud.create(db, payload)
+    await audit.log(db, user, "create", "tower", obj.id, payload)
     return obj
 
 
 @router.patch("/{tower_id}", response_model=TowerOut)
 async def update_tower(tower_id: int, data: TowerUpdate, db: AsyncSession = Depends(get_db),
-                       user: User = Depends(require_role("agent"))):
+                       user: User = Depends(require_capability("update"))):
     obj = await crud.get(db, tower_id)
     if not obj:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Tower not found")
@@ -66,7 +78,7 @@ async def update_tower(tower_id: int, data: TowerUpdate, db: AsyncSession = Depe
 
 @router.delete("/{tower_id}", status_code=204)
 async def delete_tower(tower_id: int, db: AsyncSession = Depends(get_db),
-                       user: User = Depends(require_role("editor"))):
+                       user: User = Depends(require_capability("delete"))):
     obj = await crud.get(db, tower_id)
     if not obj:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Tower not found")

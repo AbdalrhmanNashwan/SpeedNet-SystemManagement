@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { useMonitor } from "@/hooks/useMonitor";
 import { StatusDot } from "@/components/StatusDot";
 import { Breadcrumbs } from "@/components/Breadcrumbs";
+import { useT } from "@/i18n";
 import type { MonitorRef, PingStatus } from "@/types";
 
 /** Pick the best link target for an IP: a focusable device on a tower, else its
@@ -19,12 +20,12 @@ function towerLink(refs: MonitorRef[]): string | null {
 
 type Filter = "all" | "up" | "down" | "unknown";
 
-function ago(iso: string | null): string {
+function ago(iso: string | null, t: (s: string, v?: Record<string, string | number>) => string): string {
   if (!iso) return "—";
   const s = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 1000));
-  if (s < 60) return `${s}s ago`;
-  if (s < 3600) return `${Math.round(s / 60)}m ago`;
-  return `${Math.round(s / 3600)}h ago`;
+  if (s < 60) return t("{n}s ago", { n: s });
+  if (s < 3600) return t("{n}m ago", { n: Math.round(s / 60) });
+  return t("{n}h ago", { n: Math.round(s / 3600) });
 }
 
 function Stat({ label, value, cls }: { label: string; value: number | string; cls?: string }) {
@@ -39,6 +40,7 @@ function Stat({ label, value, cls }: { label: string; value: number | string; cl
 /** Live network monitor: every IP in the database with its real-time ping status. */
 export default function Monitor() {
   const { data, isLoading, error } = useMonitor();
+  const t = useT();
   const [filter, setFilter] = useState<Filter>("all");
   const [q, setQ] = useState("");
 
@@ -54,38 +56,38 @@ export default function Monitor() {
   }, [data, filter, q]);
 
   const tabs: { key: Filter; label: string; cls?: string }[] = [
-    { key: "all", label: `All ${data?.total ?? 0}` },
-    { key: "up", label: `Online ${data?.up ?? 0}`, cls: "text-green" },
-    { key: "down", label: `Offline ${data?.down ?? 0}`, cls: "text-red" },
-    { key: "unknown", label: `Unknown ${data?.unknown ?? 0}`, cls: "text-muted2" },
+    { key: "all", label: t("All {n}", { n: data?.total ?? 0 }) },
+    { key: "up", label: t("Online {n}", { n: data?.up ?? 0 }), cls: "text-green" },
+    { key: "down", label: t("Offline {n}", { n: data?.down ?? 0 }), cls: "text-red" },
+    { key: "unknown", label: t("Unknown {n}", { n: data?.unknown ?? 0 }), cls: "text-muted2" },
   ];
 
   return (
     <main className="max-w-5xl mx-auto px-4 sm:px-6 py-10">
-      <Breadcrumbs items={[{ label: "Home", to: "/", icon: "🏠" }, { label: "Monitor", icon: "📡" }]} />
+      <Breadcrumbs items={[{ label: t("Home"), to: "/", icon: "🏠" }, { label: t("Monitor"), icon: "📡" }]} />
       <div className="flex items-center gap-3 mb-6">
         <span className="text-4xl">📡</span>
         <div>
-          <h1 className="text-2xl font-extrabold">Network Monitor</h1>
+          <h1 className="text-2xl font-extrabold">{t("Network Monitor")}</h1>
           <p className="text-muted text-sm">
-            Live ICMP ping of every IP in the database
-            {data?.sweep_completed_at && <> · last sweep {ago(data.sweep_completed_at)}</>}
-            {data && !data.running && <span className="text-red"> · monitor not running</span>}
+            {t("Live ICMP ping of every IP in the database")}
+            {data?.sweep_completed_at && <> · {t("last sweep {ago}", { ago: ago(data.sweep_completed_at, t) })}</>}
+            {data && !data.running && <span className="text-red"> · {t("monitor not running")}</span>}
           </p>
         </div>
       </div>
 
       {data?.error && (
         <div className="mb-4 px-4 py-3 rounded-lg border border-red/40 bg-red/10 text-red text-sm">
-          Monitor error: {data.error}
+          {t("Monitor error: {err}", { err: data.error })}
         </div>
       )}
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
-        <Stat label="Total IPs" value={data?.total ?? 0} />
-        <Stat label="Online" value={data?.up ?? 0} cls="text-green" />
-        <Stat label="Offline" value={data?.down ?? 0} cls="text-red" />
-        <Stat label="Unknown" value={data?.unknown ?? 0} cls="text-muted2" />
+        <Stat label={t("Total IPs")} value={data?.total ?? 0} />
+        <Stat label={t("Online")} value={data?.up ?? 0} cls="text-green" />
+        <Stat label={t("Offline")} value={data?.down ?? 0} cls="text-red" />
+        <Stat label={t("Unknown")} value={data?.unknown ?? 0} cls="text-muted2" />
       </div>
 
       <div className="flex flex-wrap items-center gap-2 mb-4">
@@ -97,23 +99,23 @@ export default function Monitor() {
             {t.label}
           </button>
         ))}
-        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Filter by IP or source…"
-          className="sm:ml-auto bg-bg2 border border-line rounded-lg px-3 py-1.5 text-sm outline-none focus:border-blue w-full sm:w-56" />
+        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("Filter by IP or source…")}
+          className="sm:ms-auto bg-bg2 border border-line rounded-lg px-3 py-1.5 text-sm outline-none focus:border-blue w-full sm:w-56" />
       </div>
 
       {isLoading ? (
-        <div className="text-muted">Loading…</div>
+        <div className="text-muted">{t("Loading…")}</div>
       ) : error ? (
-        <div className="text-red">Failed to load monitor status.</div>
+        <div className="text-red">{t("Failed to load monitor status.")}</div>
       ) : rows.length === 0 ? (
-        <div className="text-muted">No IPs match.</div>
+        <div className="text-muted">{t("No IPs match.")}</div>
       ) : (
         <div className="border border-line rounded-[13px] overflow-auto max-h-[75vh]">
           <table className="w-full border-collapse text-[12.5px]">
             <thead>
               <tr>
                 {["Status", "IP", "Latency", "Loss", "Source", "Checked"].map((h) => (
-                  <th key={h} className="sticky top-0 z-10 bg-panel text-left px-3 py-2 text-[9.5px] uppercase tracking-wide text-muted2 font-extrabold border-b border-line">{h}</th>
+                  <th key={h} className="sticky top-0 z-10 bg-panel text-start px-3 py-2 text-[9.5px] uppercase tracking-wide text-muted2 font-extrabold border-b border-line">{t(h)}</th>
                 ))}
               </tr>
             </thead>
@@ -136,7 +138,7 @@ export default function Monitor() {
                   <td className="px-3 py-2 text-muted">{r.latency_ms != null ? `${r.latency_ms} ms` : "—"}</td>
                   <td className="px-3 py-2 text-muted">{r.status === "up" ? `${Math.round(r.packet_loss * 100)}%` : "—"}</td>
                   <td className="px-3 py-2 text-muted2">{r.sources.join(", ")}</td>
-                  <td className="px-3 py-2 text-muted2">{ago(r.last_checked)}</td>
+                  <td className="px-3 py-2 text-muted2">{ago(r.last_checked, t)}</td>
                 </tr>
               ))}
             </tbody>

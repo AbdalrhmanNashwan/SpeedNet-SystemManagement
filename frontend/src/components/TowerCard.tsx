@@ -1,9 +1,11 @@
 import { Link } from "react-router-dom";
+import { useT } from "@/i18n";
 import type { Tower } from "@/types";
 
 export function TowerCard({ tower }: { tower: Tower }) {
+  const t = useT();
   const sc = (tower.status || "Active").toLowerCase().replace(/[^a-z]/g, "-");
-  const meta = [tower.area, tower.user_count && `${tower.user_count} users`, tower.link_type]
+  const meta = [tower.area, tower.user_count && t("{n} users", { n: tower.user_count }), tower.link_type]
     .filter(Boolean).join(" · ");
   return (
     <Link to={`/tower/${tower.id}`} className="card p-4 block">

@@ -19,7 +19,7 @@ export function Breadcrumbs({ items }: { items: Crumb[] }) {
         const last = i === items.length - 1;
         const body = (
           <span className={last ? "text-text font-bold" : "text-muted hover:text-cyan"}>
-            {c.icon && <span className="mr-1">{c.icon}</span>}
+            {c.icon && <span className="me-1">{c.icon}</span>}
             {c.label}
           </span>
         );

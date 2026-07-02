@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useAudit } from "@/hooks/useAudit";
 import { Breadcrumbs } from "@/components/Breadcrumbs";
+import { useT } from "@/i18n";
 import type { AuditEntry } from "@/types";
 
 const PAGE = 100;
@@ -38,6 +39,7 @@ function Changes({ changes }: { changes: Record<string, unknown> | null }) {
 
 /** Admin-only audit history: every create / edit / delete / transfer, newest first. */
 export default function History() {
+  const t = useT();
   const [entity, setEntity] = useState("");
   const [action, setAction] = useState("");
   const [q, setQ] = useState("");
@@ -53,50 +55,50 @@ export default function History() {
 
   return (
     <main className="max-w-6xl mx-auto px-4 sm:px-6 py-10">
-      <Breadcrumbs items={[{ label: "Home", to: "/", icon: "🏠" }, { label: "History", icon: "📜" }]} />
+      <Breadcrumbs items={[{ label: t("Home"), to: "/", icon: "🏠" }, { label: t("History"), icon: "📜" }]} />
       <div className="flex items-center gap-3 mb-6">
         <span className="text-4xl">📜</span>
         <div>
-          <h1 className="text-2xl font-extrabold">History</h1>
-          <p className="text-muted text-sm">Every change — who did what, and when{isFetching && " · refreshing…"}</p>
+          <h1 className="text-2xl font-extrabold">{t("History")}</h1>
+          <p className="text-muted text-sm">{t("Every change — who did what, and when")}{isFetching && t(" · refreshing…")}</p>
         </div>
       </div>
 
       <div className="flex flex-wrap items-center gap-2 mb-4">
         <select value={action} onChange={(e) => reset(() => setAction(e.target.value))} className={selCls}>
-          <option value="">All actions</option>
-          {ACTIONS.map((a) => <option key={a} value={a}>{a}</option>)}
+          <option value="">{t("All actions")}</option>
+          {ACTIONS.map((a) => <option key={a} value={a}>{t(a)}</option>)}
         </select>
         <select value={entity} onChange={(e) => reset(() => setEntity(e.target.value))} className={selCls}>
-          <option value="">All types</option>
-          {ENTITIES.map((e) => <option key={e} value={e}>{e}</option>)}
+          <option value="">{t("All types")}</option>
+          {ENTITIES.map((e) => <option key={e} value={e}>{t(e)}</option>)}
         </select>
-        <input value={q} onChange={(e) => reset(() => setQ(e.target.value))} placeholder="Filter by user email…"
+        <input value={q} onChange={(e) => reset(() => setQ(e.target.value))} placeholder={t("Filter by user email…")}
           className={`${selCls} w-56`} />
         {(action || entity || q) && (
           <button onClick={() => reset(() => { setAction(""); setEntity(""); setQ(""); })}
-            className="text-xs text-muted hover:text-text">Clear</button>
+            className="text-xs text-muted hover:text-text">{t("Clear")}</button>
         )}
-        <div className="ml-auto flex items-center gap-2 text-sm">
+        <div className="ms-auto flex items-center gap-2 text-sm">
           <button disabled={page === 0} onClick={() => setPage((p) => Math.max(0, p - 1))}
-            className="px-2 py-1 rounded border border-line disabled:opacity-40 hover:border-blue">‹ Newer</button>
-          <span className="text-muted2 text-xs">page {page + 1}</span>
+            className="px-2 py-1 rounded border border-line disabled:opacity-40 hover:border-blue">{t("‹ Newer")}</button>
+          <span className="text-muted2 text-xs">{t("page {n}", { n: page + 1 })}</span>
           <button disabled={rows.length < PAGE} onClick={() => setPage((p) => p + 1)}
-            className="px-2 py-1 rounded border border-line disabled:opacity-40 hover:border-blue">Older ›</button>
+            className="px-2 py-1 rounded border border-line disabled:opacity-40 hover:border-blue">{t("Older ›")}</button>
         </div>
       </div>
 
       {isLoading ? (
-        <div className="text-muted">Loading…</div>
+        <div className="text-muted">{t("Loading…")}</div>
       ) : rows.length === 0 ? (
-        <div className="text-muted">No history entries match.</div>
+        <div className="text-muted">{t("No history entries match.")}</div>
       ) : (
         <div className="border border-line rounded-[13px] overflow-auto max-h-[75vh]">
           <table className="w-full border-collapse text-[12.5px]">
             <thead>
               <tr>
                 {["When", "User", "Action", "Type", "ID", "Details"].map((h) => (
-                  <th key={h} className="sticky top-0 z-10 bg-panel text-left px-3 py-2 text-[9.5px] uppercase tracking-wide text-muted2 font-extrabold border-b border-line">{h}</th>
+                  <th key={h} className="sticky top-0 z-10 bg-panel text-start px-3 py-2 text-[9.5px] uppercase tracking-wide text-muted2 font-extrabold border-b border-line">{t(h)}</th>
                 ))}
               </tr>
             </thead>
@@ -107,10 +109,10 @@ export default function History() {
                   <td className="px-3 py-2 whitespace-nowrap">{r.user_email ?? "—"}</td>
                   <td className="px-3 py-2">
                     <span className={`text-[10px] font-extrabold uppercase px-2 py-0.5 rounded border ${ACTION_STYLE[r.action] ?? "text-muted border-line"}`}>
-                      {r.action}
+                      {t(r.action)}
                     </span>
                   </td>
-                  <td className="px-3 py-2 whitespace-nowrap">{r.entity}</td>
+                  <td className="px-3 py-2 whitespace-nowrap">{t(r.entity)}</td>
                   <td className="px-3 py-2 text-muted2">{r.entity_id ?? "—"}</td>
                   <td className="px-3 py-2"><Changes changes={r.changes} /></td>
                 </tr>

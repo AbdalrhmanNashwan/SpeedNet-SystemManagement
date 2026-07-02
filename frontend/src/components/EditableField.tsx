@@ -1,16 +1,19 @@
 import { useRef, useState } from "react";
 import { toast } from "@/lib/toast";
+import { useT } from "@/i18n";
 
 const CUSTOM = "__custom__";
 
-async function copy(text: string) {
+type CopyMsgs = { copied: string; unsupported: string; failed: string };
+
+async function copy(text: string, m: CopyMsgs) {
   // navigator.clipboard only exists in a secure context (HTTPS or localhost).
   // Over plain HTTP on the LAN (e.g. a phone) it's undefined, so fall back to
   // a temporary <textarea> + execCommand("copy").
   try {
     if (navigator.clipboard && window.isSecureContext) {
       await navigator.clipboard.writeText(text);
-      toast.success("Copied");
+      toast.success(m.copied);
       return;
     }
     const ta = document.createElement("textarea");
@@ -22,10 +25,10 @@ async function copy(text: string) {
     ta.select();
     const ok = document.execCommand("copy");
     document.body.removeChild(ta);
-    if (ok) toast.success("Copied");
-    else toast.error("Copy not supported here");
+    if (ok) toast.success(m.copied);
+    else toast.error(m.unsupported);
   } catch {
-    toast.error("Copy failed");
+    toast.error(m.failed);
   }
 }
 
@@ -48,6 +51,8 @@ export function EditableField({
   placeholder?: string;
   options?: string[];
 }) {
+  const t = useT();
+  const copyMsgs = { copied: t("Copied"), unsupported: t("Copy not supported here"), failed: t("Copy failed") };
   const [editing, setEditing] = useState(false);
   const [customMode, setCustomMode] = useState(false);
   const [draft, setDraft] = useState(value ?? "");
@@ -59,7 +64,7 @@ export function EditableField({
   // Single click → copy (after a short delay so a double-click can cancel it).
   const onSingleClick = () => {
     if (clickTimer.current) clearTimeout(clickTimer.current);
-    clickTimer.current = setTimeout(() => { if (value) copy(value); }, 220);
+    clickTimer.current = setTimeout(() => { if (value) copy(value, copyMsgs); }, 220);
   };
   const onDoubleClick = () => {
     if (clickTimer.current) { clearTimeout(clickTimer.current); clickTimer.current = null; }
@@ -71,7 +76,7 @@ export function EditableField({
       <span
         onClick={onSingleClick}
         className={`cursor-pointer rounded px-1 -mx-1 hover:bg-panel2 ${mono ? "font-mono" : ""} ${!value ? "text-muted2" : ""}`}
-        title="Click to copy"
+        title={t("Click to copy")}
       >
         {value || placeholder}
       </span>
@@ -83,7 +88,7 @@ export function EditableField({
         onClick={onSingleClick}
         onDoubleClick={onDoubleClick}
         className={`cursor-pointer rounded px-1 -mx-1 hover:bg-panel2 ${mono ? "font-mono" : ""} ${!value ? "text-muted2" : ""}`}
-        title="Click to copy · double-click to edit"
+        title={t("Click to copy · double-click to edit")}
       >
         {value || placeholder}
       </span>
@@ -114,7 +119,7 @@ export function EditableField({
       >
         <option value="">—</option>
         {opts.map((o) => <option key={o} value={o}>{o}</option>)}
-        <option value={CUSTOM}>✎ custom…</option>
+        <option value={CUSTOM}>{t("✎ custom…")}</option>
       </select>
     );
   }

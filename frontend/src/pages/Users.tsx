@@ -2,9 +2,18 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import api from "@/lib/api";
 import { useZones } from "@/hooks/useZones";
+import { useT } from "@/i18n";
 import type { User, Role } from "@/types";
 
 const ROLES: Role[] = ["admin", "editor", "viewer", "agent"];
+
+// Capability-first labels so an admin picks by what the user can DO.
+const ROLE_LABELS: Record<Role, string> = {
+  admin: "Admin — full access",
+  editor: "Editor — add, edit & delete",
+  viewer: "Viewer — watch only",
+  agent: "Agent — watch own zone",
+};
 
 function useUsers() {
   return useQuery({
@@ -16,7 +25,7 @@ function useUsers() {
 function useCreateUser() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (data: { email: string; full_name?: string; role: Role; zone_id?: number | null; password: string }) =>
+    mutationFn: async (data: { email: string; full_name?: string; role: Role; zone_id?: number | null; password: string; can_create: boolean; can_update: boolean; can_delete: boolean }) =>
       (await api.post<User>("/users", data)).data,
     onSuccess: () => qc.invalidateQueries({ queryKey: ["users"] }),
   });
@@ -39,6 +48,38 @@ function useDeleteUser() {
   });
 }
 
+const CAP_LABELS = {
+  can_create: "Create",
+  can_update: "Update",
+  can_delete: "Delete",
+} as const;
+
+// Only agents get per-user capability toggles. The other roles have fixed access
+// implied by the role, so switching to them sets the matching flags automatically.
+function capsForRole(role: Role): Partial<Record<"can_create" | "can_update" | "can_delete", boolean>> {
+  if (role === "editor") return { can_create: true, can_update: true, can_delete: true };
+  if (role === "viewer") return { can_create: false, can_update: false, can_delete: false };
+  return {}; // admin (implicitly all) / agent (keep the user's toggles)
+}
+
+// A compact on/off pill for a single capability.
+function CapToggle({ label, on, onToggle }: { label: string; on: boolean; onToggle: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-pressed={on}
+      title={label}
+      className={`px-2 py-1 rounded-md text-[11px] font-bold border transition-colors ${
+        on ? "bg-green/15 border-green/50 text-green"
+           : "bg-bg2 border-line text-muted2 hover:border-line2"
+      }`}
+    >
+      {label}
+    </button>
+  );
+}
+
 const ROLE_COLORS: Record<Role, string> = {
   admin: "text-red",
   editor: "text-orange",
@@ -49,7 +90,9 @@ const ROLE_COLORS: Record<Role, string> = {
 function AddUserModal({ onClose }: { onClose: () => void }) {
   const { data: zones } = useZones();
   const create = useCreateUser();
+  const t = useT();
   const [form, setForm] = useState({ email: "", full_name: "", role: "viewer" as Role, zone_id: "", password: "" });
+  const [caps, setCaps] = useState({ can_create: false, can_update: false, can_delete: false });
 
   const set = (k: keyof typeof form, v: string) => setForm((f) => ({ ...f, [k]: v }));
 
@@ -61,6 +104,9 @@ function AddUserModal({ onClose }: { onClose: () => void }) {
       role: form.role,
       zone_id: form.zone_id ? Number(form.zone_id) : null,
       password: form.password,
+      // agents are configured with explicit toggles; other roles imply their caps
+      ...({ can_create: false, can_update: false, can_delete: false,
+            ...(form.role === "agent" ? caps : capsForRole(form.role)) }),
     });
     onClose();
   };
@@ -68,40 +114,52 @@ function AddUserModal({ onClose }: { onClose: () => void }) {
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
       <div className="card p-8 w-full max-w-md">
-        <h2 className="text-lg font-extrabold mb-6">Add User</h2>
+        <h2 className="text-lg font-extrabold mb-6">{t("Add User")}</h2>
         <form onSubmit={submit} className="flex flex-col gap-3">
           {(["email", "full_name", "password"] as const).map((k) => (
             <div key={k}>
-              <label className="text-xs text-muted2 uppercase tracking-wide font-bold mb-1 block">{k.replace("_", " ")}</label>
+              <label className="text-xs text-muted2 uppercase tracking-wide font-bold mb-1 block">{t({ email: "Email", full_name: "Name", password: "Password" }[k])}</label>
               <input type={k === "password" ? "password" : k === "email" ? "email" : "text"}
                 required={k !== "full_name"} value={form[k]} onChange={(e) => set(k, e.target.value)}
                 className="w-full bg-bg2 border border-line rounded-lg px-3 py-2 text-sm outline-none focus:border-blue" />
             </div>
           ))}
           <div>
-            <label className="text-xs text-muted2 uppercase tracking-wide font-bold mb-1 block">Role</label>
+            <label className="text-xs text-muted2 uppercase tracking-wide font-bold mb-1 block">{t("Role")}</label>
             <select value={form.role} onChange={(e) => set("role", e.target.value)}
               className="w-full bg-bg2 border border-line rounded-lg px-3 py-2 text-sm outline-none focus:border-blue">
-              {ROLES.map((r) => <option key={r}>{r}</option>)}
+              {ROLES.map((r) => <option key={r} value={r}>{t(ROLE_LABELS[r])}</option>)}
             </select>
           </div>
           {form.role === "agent" && (
             <div>
-              <label className="text-xs text-muted2 uppercase tracking-wide font-bold mb-1 block">Zone</label>
+              <label className="text-xs text-muted2 uppercase tracking-wide font-bold mb-1 block">{t("Zone")}</label>
               <select value={form.zone_id} onChange={(e) => set("zone_id", e.target.value)}
                 className="w-full bg-bg2 border border-line rounded-lg px-3 py-2 text-sm outline-none focus:border-blue">
-                <option value="">— none —</option>
+                <option value="">{t("— none —")}</option>
                 {zones?.map((z) => <option key={z.id} value={z.id}>{z.name}</option>)}
               </select>
+            </div>
+          )}
+          {form.role === "agent" && (
+            <div>
+              <label className="text-xs text-muted2 uppercase tracking-wide font-bold mb-1 block">{t("Permissions")}</label>
+              <div className="flex gap-1.5">
+                {(["can_create", "can_update", "can_delete"] as const).map((cap) => (
+                  <CapToggle key={cap} label={t(CAP_LABELS[cap])} on={caps[cap]}
+                    onToggle={() => setCaps((c) => ({ ...c, [cap]: !c[cap] }))} />
+                ))}
+              </div>
+              <p className="text-[11px] text-muted2 mt-1">{t("Leave all off for view-only access.")}</p>
             </div>
           )}
           {create.error && <p className="text-red text-xs">{String(create.error)}</p>}
           <div className="flex gap-3 mt-2">
             <button type="button" onClick={onClose}
-              className="flex-1 py-2 rounded-lg border border-line text-muted text-sm hover:border-line2">Cancel</button>
+              className="flex-1 py-2 rounded-lg border border-line text-muted text-sm hover:border-line2">{t("Cancel")}</button>
             <button type="submit" disabled={create.isPending}
               className="flex-1 py-2 rounded-lg bg-blue text-white text-sm font-bold disabled:opacity-50">
-              {create.isPending ? "Saving…" : "Create"}
+              {create.isPending ? t("Saving…") : t("Create")}
             </button>
           </div>
         </form>
@@ -113,6 +171,7 @@ function AddUserModal({ onClose }: { onClose: () => void }) {
 export default function Users() {
   const { data: users, isLoading } = useUsers();
   const { data: zones } = useZones();
+  const t = useT();
   const updateUser = useUpdateUser();
   const deleteUser = useDeleteUser();
   const [showAdd, setShowAdd] = useState(false);
@@ -120,25 +179,25 @@ export default function Users() {
   const zoneName = (id: number | null) => zones?.find((z) => z.id === id)?.name ?? "—";
 
   return (
-    <main className="max-w-4xl mx-auto px-4 sm:px-6 py-10">
+    <main className="max-w-5xl mx-auto px-4 sm:px-6 py-10">
       <div className="flex items-center mb-8">
-        <h1 className="text-2xl font-extrabold">Users</h1>
+        <h1 className="text-2xl font-extrabold">{t("Users")}</h1>
         <button onClick={() => setShowAdd(true)}
-          className="ml-auto bg-blue text-white text-sm font-bold px-4 py-1.5 rounded-lg hover:bg-blue/80">
-          + Add User
+          className="ms-auto bg-blue text-white text-sm font-bold px-4 py-1.5 rounded-lg hover:bg-blue/80">
+          {t("+ Add User")}
         </button>
       </div>
 
       {isLoading ? (
-        <div className="text-muted">Loading…</div>
+        <div className="text-muted">{t("Loading…")}</div>
       ) : (
-        <div className="card overflow-x-auto">
-          <table className="w-full text-sm border-collapse min-w-[640px]">
+        <div className="border border-line rounded-[13px] overflow-x-auto bg-panel">
+          <table className="w-full text-sm border-collapse min-w-[880px]">
             <thead>
               <tr>
-                {["Email", "Name", "Role", "Zone", "Active", ""].map((h) => (
-                  <th key={h} className="text-left px-4 py-3 text-[10px] text-muted2 uppercase tracking-wide font-extrabold border-b border-line bg-panel2">
-                    {h}
+                {["Email", "Name", "Role", "Zone", "Permissions", "Active", ""].map((h) => (
+                  <th key={h} className="text-start px-4 py-3 text-[10px] text-muted2 uppercase tracking-wide font-extrabold border-b border-line bg-panel2">
+                    {h && t(h)}
                   </th>
                 ))}
               </tr>
@@ -149,23 +208,60 @@ export default function Users() {
                   <td className="px-4 py-3 font-mono text-xs">{u.email}</td>
                   <td className="px-4 py-3">{u.full_name ?? "—"}</td>
                   <td className="px-4 py-3">
-                    <span className={`font-bold ${ROLE_COLORS[u.role]}`}>{u.role}</span>
+                    <select
+                      value={u.role}
+                      onChange={(e) => {
+                        const role = e.target.value as Role;
+                        updateUser.mutate({ id: u.id, patch: { role, ...capsForRole(role) } });
+                      }}
+                      title={t("Set what this user can do")}
+                      className={`bg-bg2 border border-line rounded-lg px-2 py-1 text-xs font-bold outline-none focus:border-blue cursor-pointer ${ROLE_COLORS[u.role]}`}
+                    >
+                      {ROLES.map((r) => <option key={r} value={r} className="text-text">{t(ROLE_LABELS[r])}</option>)}
+                    </select>
                   </td>
-                  <td className="px-4 py-3 text-muted">{zoneName(u.zone_id ?? null)}</td>
+                  <td className="px-4 py-3 text-muted">
+                    {u.role === "agent" ? (
+                      <select
+                        value={u.zone_id ?? ""}
+                        onChange={(e) => updateUser.mutate({ id: u.id, patch: { zone_id: e.target.value ? Number(e.target.value) : null } })}
+                        className="bg-bg2 border border-line rounded-lg px-2 py-1 text-xs outline-none focus:border-blue cursor-pointer"
+                      >
+                        <option value="">{t("— none —")}</option>
+                        {zones?.map((z) => <option key={z.id} value={z.id}>{z.name}</option>)}
+                      </select>
+                    ) : zoneName(u.zone_id ?? null)}
+                  </td>
+                  <td className="px-4 py-3">
+                    {u.role === "admin" ? (
+                      <span className="text-[11px] text-muted2">{t("Full access")}</span>
+                    ) : u.role === "editor" ? (
+                      <span className="text-[11px] text-muted2">{t("Add, edit & delete")}</span>
+                    ) : u.role === "viewer" ? (
+                      <span className="text-[11px] text-muted2">{t("View only")}</span>
+                    ) : (
+                      <div className="flex gap-1.5 whitespace-nowrap">
+                        {(["can_create", "can_update", "can_delete"] as const).map((cap) => (
+                          <CapToggle key={cap} label={t(CAP_LABELS[cap])} on={u[cap]}
+                            onToggle={() => updateUser.mutate({ id: u.id, patch: { [cap]: !u[cap] } })} />
+                        ))}
+                      </div>
+                    )}
+                  </td>
                   <td className="px-4 py-3">
                     <button
                       onClick={() => updateUser.mutate({ id: u.id, patch: { is_active: !u.is_active } })}
                       className={`text-xs font-bold ${u.is_active ? "text-green" : "text-red"} hover:underline`}
                     >
-                      {u.is_active ? "Active" : "Inactive"}
+                      {u.is_active ? t("Active") : t("Inactive")}
                     </button>
                   </td>
-                  <td className="px-4 py-3 text-right">
+                  <td className="px-4 py-3 text-end">
                     <button
-                      onClick={() => { if (confirm(`Delete user ${u.email}?`)) deleteUser.mutate(u.id); }}
+                      onClick={() => { if (confirm(t("Delete user {email}?", { email: u.email }))) deleteUser.mutate(u.id); }}
                       className="text-xs text-red hover:underline"
                     >
-                      Delete
+                      {t("Delete")}
                     </button>
                   </td>
                 </tr>

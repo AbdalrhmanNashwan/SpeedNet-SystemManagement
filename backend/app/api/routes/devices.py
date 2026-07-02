@@ -7,7 +7,8 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.deps import get_db, get_current_user, require_role, ROLE_LEVEL
+from app.core.deps import (get_db, get_current_user, require_role,
+                           require_capability, ROLE_LEVEL)
 from app.crud import audit
 from app.crud.device import MODEL_BY_TYPE, project_fields
 from app.models.user import User
@@ -27,9 +28,12 @@ def _model_or_404(dtype: str):
     return m
 
 
-async def _agent_scope(db: AsyncSession, user: User, tower_id: int):
+async def _agent_scope(db: AsyncSession, user: User, tower_id: int | None):
     if user.role != "agent":
         return
+    # an agent with no zone assigned has no scope at all — deny everything
+    if user.zone_id is None or tower_id is None:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Outside your zone")
     res = await db.execute(select(Tower).where(Tower.id == tower_id))
     tower = res.scalar_one_or_none()
     if not tower or tower.zone_id != user.zone_id:
@@ -44,8 +48,11 @@ async def list_devices(dtype: str, tower_id: int | None = None,
     stmt = select(model)
     if tower_id is not None:
         stmt = stmt.where(model.tower_id == tower_id)
-    # agents only see devices on towers within their zone
+    # agents only see devices on towers within their zone; an agent with no
+    # zone assigned sees nothing (== None would match zone-less towers)
     if user.role == "agent":
+        if user.zone_id is None:
+            return []
         stmt = stmt.join(Tower, Tower.id == model.tower_id).where(Tower.zone_id == user.zone_id)
     res = await db.execute(stmt)
     items = [DeviceOut.model_validate(r) for r in res.scalars().all()]
@@ -59,7 +66,7 @@ async def list_devices(dtype: str, tower_id: int | None = None,
 
 @router.post("/{dtype}", response_model=DeviceOut, status_code=201)
 async def create_device(dtype: str, data: DeviceCreate, db: AsyncSession = Depends(get_db),
-                        user: User = Depends(require_role("agent"))):
+                        user: User = Depends(require_capability("create"))):
     model = _model_or_404(dtype)
     await _agent_scope(db, user, data.tower_id)
     fields = project_fields(data.model_dump(), dtype)
@@ -73,7 +80,7 @@ async def create_device(dtype: str, data: DeviceCreate, db: AsyncSession = Depen
 @router.patch("/{dtype}/{id}", response_model=DeviceOut)
 async def update_device(dtype: str, id: int, data: DeviceUpdate,
                         db: AsyncSession = Depends(get_db),
-                        user: User = Depends(require_role("agent"))):
+                        user: User = Depends(require_capability("update"))):
     model = _model_or_404(dtype)
     res = await db.execute(select(model).where(model.id == id))
     obj = res.scalar_one_or_none()
@@ -93,7 +100,7 @@ async def update_device(dtype: str, id: int, data: DeviceUpdate,
 
 @router.delete("/{dtype}/{id}", status_code=204)
 async def delete_device(dtype: str, id: int, db: AsyncSession = Depends(get_db),
-                        user: User = Depends(require_role("agent"))):
+                        user: User = Depends(require_capability("delete"))):
     model = _model_or_404(dtype)
     res = await db.execute(select(model).where(model.id == id))
     obj = res.scalar_one_or_none()
@@ -107,7 +114,7 @@ async def delete_device(dtype: str, id: int, db: AsyncSession = Depends(get_db),
 @router.post("/{dtype}/{id}/transfer", response_model=DeviceOut)
 async def transfer_device(dtype: str, id: int, body: DeviceTransfer,
                           db: AsyncSession = Depends(get_db),
-                          user: User = Depends(require_role("editor"))):
+                          user: User = Depends(require_capability("update"))):
     """Move a device to another section (type) and/or another tower."""
     src_model = _model_or_404(dtype)
     res = await db.execute(select(src_model).where(src_model.id == id))
@@ -119,6 +126,8 @@ async def transfer_device(dtype: str, id: int, body: DeviceTransfer,
     target_type = body.to_type or dtype
     target_model = _model_or_404(target_type)
     target_tower = body.to_tower_id or src.tower_id
+    # an agent must keep the device inside their own zone (source AND destination)
+    await _agent_scope(db, user, target_tower)
 
     # snapshot source columns into a dict
     src_data = {c.name: getattr(src, c.name) for c in src.__table__.columns

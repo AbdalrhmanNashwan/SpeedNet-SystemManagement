@@ -1,31 +1,37 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import type { Device, DeviceType } from "@/types";
 import { EditableField } from "./EditableField";
 import { StatusDot } from "./StatusDot";
 import { useUpdateDevice, useDeleteDevice } from "@/hooks/useDevices";
 import { useIpStatusMap } from "@/hooks/useMonitor";
 import { normalizeIp } from "@/lib/ip";
+import { useT } from "@/i18n";
 
 interface Col { key: keyof Device; label: string; mono?: boolean; cls?: string; options?: string[]; }
 
 /**
  * Renders a device section as an editable table. Every cell is an EditableField.
  * Rows can be multi-selected via checkboxes for bulk Delete / Transfer, and each
- * row also has its own Delete + Transfer actions. `canEdit` comes from the role.
+ * row also has its own Delete + Transfer actions. Capabilities are granular:
+ * `canUpdate` gates inline edits + Transfer (a move), `canDelete` gates deletes.
  */
 export function DeviceTable({
-  type, rows, cols, canEdit, onTransfer, highlightId,
+  type, rows, cols, canUpdate, canDelete, onTransfer, highlightId,
 }: {
   type: DeviceType;
   rows: Device[];
   cols: Col[];
-  canEdit: boolean;
+  canUpdate: boolean;
+  canDelete: boolean;
   onTransfer: (rows: Device[]) => void;
   highlightId?: number;
 }) {
+  const canAct = canUpdate || canDelete;   // any per-row action → show the columns
   const update = useUpdateDevice(type);
   const del = useDeleteDevice(type);
+  const t = useT();
   const ipStatus = useIpStatusMap();
+  const scrolledFor = useRef<number | undefined>(undefined);  // scroll to highlight only once
   const [selected, setSelected] = useState<Set<number>>(new Set());
 
   const toggle = (id: number) =>
@@ -42,36 +48,36 @@ export function DeviceTable({
   const selectedRows = rows.filter((r) => selected.has(r.id));
 
   const bulkDelete = async () => {
-    if (!confirm(`Delete ${selectedRows.length} selected row(s)? This cannot be undone.`)) return;
+    if (!confirm(t("Delete {n} selected row(s)? This cannot be undone.", { n: selectedRows.length }))) return;
     for (const r of selectedRows) await del.mutateAsync(r.id);
     clear();
   };
 
   return (
     <div>
-      {canEdit && selected.size > 0 && (
+      {canAct && selected.size > 0 && (
         <div className="flex items-center gap-3 mb-2 px-3 py-2 rounded-lg bg-panel2 border border-line text-xs">
-          <span className="font-bold">{selected.size} selected</span>
-          <button onClick={() => onTransfer(selectedRows)} className="text-cyan hover:underline">Transfer selected</button>
-          <button onClick={bulkDelete} className="text-red hover:underline">Delete selected</button>
-          <button onClick={clear} className="text-muted hover:text-text ml-auto">Clear</button>
+          <span className="font-bold">{t("{n} selected", { n: selected.size })}</span>
+          {canUpdate && <button onClick={() => onTransfer(selectedRows)} className="text-cyan hover:underline">{t("Transfer selected")}</button>}
+          {canDelete && <button onClick={bulkDelete} className="text-red hover:underline">{t("Delete selected")}</button>}
+          <button onClick={clear} className="text-muted hover:text-text ms-auto">{t("Clear")}</button>
         </div>
       )}
       <div className="border border-line rounded-[13px] overflow-auto max-h-[75vh]">
         <table className="w-full border-collapse text-[12.5px]">
           <thead>
             <tr>
-              {canEdit && (
+              {canAct && (
                 <th className="sticky top-0 z-10 bg-panel border-b border-line px-3 py-2 w-8">
-                  <input type="checkbox" checked={allSelected} onChange={toggleAll} aria-label="Select all" />
+                  <input type="checkbox" checked={allSelected} onChange={toggleAll} aria-label={t("Select all")} />
                 </th>
               )}
               {cols.map((c) => (
-                <th key={String(c.key)} className="sticky top-0 z-10 bg-panel text-left px-3 py-2 text-[9.5px] uppercase tracking-wide text-muted2 font-extrabold border-b border-line">
-                  {c.label}
+                <th key={String(c.key)} className="sticky top-0 z-10 bg-panel text-start px-3 py-2 text-[9.5px] uppercase tracking-wide text-muted2 font-extrabold border-b border-line">
+                  {t(c.label)}
                 </th>
               ))}
-              {canEdit && <th className="sticky top-0 z-10 bg-panel border-b border-line" />}
+              {canAct && <th className="sticky top-0 z-10 bg-panel border-b border-line" />}
             </tr>
           </thead>
           <tbody>
@@ -81,9 +87,14 @@ export function DeviceTable({
               const hl = r.id === highlightId;
               return (
                 <tr key={r.id}
-                  ref={hl ? (el) => el?.scrollIntoView({ block: "center", behavior: "smooth" }) : undefined}
+                  ref={hl ? (el) => {
+                    if (el && scrolledFor.current !== highlightId) {
+                      scrolledFor.current = highlightId;
+                      el.scrollIntoView({ block: "center", behavior: "smooth" });
+                    }
+                  } : undefined}
                   className={`${dim ? "opacity-50" : ""} ${sel ? "bg-panel2" : ""} ${hl ? "ring-2 ring-cyan ring-inset" : ""}`}>
-                  {canEdit && (
+                  {canAct && (
                     <td className="px-3 py-2 border-b border-line/50">
                       <input type="checkbox" checked={sel} onChange={() => toggle(r.id)} aria-label={`Select row ${r.id}`} />
                     </td>
@@ -99,17 +110,17 @@ export function DeviceTable({
                             value={r[c.key] as string}
                             mono={c.mono}
                             options={c.options}
-                            canEdit={canEdit}
+                            canEdit={canUpdate}
                             onSave={(v) => { update.mutateAsync({ id: r.id, patch: { [c.key]: v } }); }}
                           />
                         </div>
                       </td>
                     );
                   })}
-                  {canEdit && (
-                    <td className="px-3 py-2 border-b border-line/50 whitespace-nowrap text-right">
-                      <button onClick={() => onTransfer([r])} className="text-cyan text-xs mr-3 hover:underline">Transfer</button>
-                      <button onClick={() => { if (confirm("Delete this row?")) del.mutate(r.id); }} className="text-red text-xs hover:underline">Delete</button>
+                  {canAct && (
+                    <td className="px-3 py-2 border-b border-line/50 whitespace-nowrap text-end">
+                      {canUpdate && <button onClick={() => onTransfer([r])} className="text-cyan text-xs me-3 hover:underline">{t("Transfer")}</button>}
+                      {canDelete && <button onClick={() => { if (confirm(t("Delete this row?"))) del.mutate(r.id); }} className="text-red text-xs hover:underline">{t("Delete")}</button>}
                     </td>
                   )}
                 </tr>

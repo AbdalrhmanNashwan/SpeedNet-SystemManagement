@@ -16,6 +16,13 @@ class User(Base):
     role: Mapped[str] = mapped_column(String, default="viewer")  # admin/editor/viewer/agent
     # for agent scope: restrict to one zone (extend to many via a join table later)
     zone_id: Mapped[int | None] = mapped_column(ForeignKey("zones.id", ondelete="SET NULL"))
+    # Per-user write capabilities. Viewing is always allowed (within the user's
+    # scope); these three gate create/update/delete. Admins implicitly have all
+    # three regardless of the flags. Applies to agents too — an agent with these
+    # can create/update/delete, but only within their own zone.
+    can_create: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false", default=False)
+    can_update: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false", default=False)
+    can_delete: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false", default=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     # bumped on logout / password change / deactivate to invalidate old JWTs
     token_version: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0", default=0)

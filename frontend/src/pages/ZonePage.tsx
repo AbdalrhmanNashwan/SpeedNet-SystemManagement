@@ -3,9 +3,12 @@ import { useZones } from "@/hooks/useZones";
 import { useTowers } from "@/hooks/useTowers";
 import { TowerCard } from "@/components/TowerCard";
 import { Breadcrumbs } from "@/components/Breadcrumbs";
+import { useT } from "@/i18n";
+import { emojiIcon } from "@/lib/emoji";
 
 export default function ZonePage() {
   const { id } = useParams<{ id: string }>();
+  const t = useT();
   const zoneId = Number(id);
 
   const { data: zones } = useZones();
@@ -16,22 +19,22 @@ export default function ZonePage() {
   return (
     <main className="max-w-5xl mx-auto px-4 sm:px-6 py-10">
       <Breadcrumbs items={[
-        { label: "Home", to: "/", icon: "🏠" },
-        { label: zone?.name ?? "Zone", icon: zone?.icon ?? "🌐" },
+        { label: t("Home"), to: "/", icon: "🏠" },
+        { label: zone?.name ?? t("Zone"), icon: emojiIcon(zone?.icon) ?? "🌐" },
       ]} />
 
       <div className="flex items-center gap-3 mb-8">
-        {zone?.icon && <span className="text-4xl">{zone.icon}</span>}
+        {emojiIcon(zone?.icon) && <span className="text-4xl">{emojiIcon(zone?.icon)}</span>}
         <div>
-          <h1 className="text-2xl font-extrabold">{zone?.name ?? "Zone"}</h1>
+          <h1 className="text-2xl font-extrabold">{zone?.name ?? t("Zone")}</h1>
           {zone?.tag && <div className="text-xs text-muted2 uppercase tracking-widest mt-0.5">{zone.tag}</div>}
         </div>
       </div>
 
       {isLoading ? (
-        <div className="text-muted">Loading…</div>
+        <div className="text-muted">{t("Loading…")}</div>
       ) : towers?.length === 0 ? (
-        <div className="text-muted">No towers in this zone.</div>
+        <div className="text-muted">{t("No towers in this zone.")}</div>
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
           {towers?.map((t) => <TowerCard key={t.id} tower={t} />)}

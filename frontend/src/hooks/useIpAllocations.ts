@@ -1,23 +1,22 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import api from "@/lib/api";
 import { toast } from "@/lib/toast";
-import { useAuth } from "@/hooks/useAuth";
+import { usePerms } from "@/hooks/usePerms";
 import type { IPAllocation } from "@/types";
 
 const KEY = ["ip-allocations"];
 
 /**
- * IP allocation registry (the "IP" sheet). The endpoint is editor+ only because
- * these rows carry master/slave credentials, so the query is disabled for
- * viewers/agents (it would 403).
+ * IP allocation registry (the "IP" sheet). These rows carry master/slave
+ * credentials, so the endpoint is limited to admins and non-agent staff with
+ * an edit capability — the query is disabled for anyone else (it would 403).
  */
 export function useIpAllocations() {
-  const { user } = useAuth();
-  const allowed = user?.role === "admin" || user?.role === "editor";
+  const { canSeeIpAllocations } = usePerms();
   return useQuery({
     queryKey: KEY,
     queryFn: async () => (await api.get<IPAllocation[]>("/ip-allocations")).data,
-    enabled: allowed,
+    enabled: canSeeIpAllocations,
   });
 }
 

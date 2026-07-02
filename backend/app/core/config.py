@@ -41,6 +41,37 @@ class Settings(BaseSettings):
     # sockets instead. Windows always needs privileged=True.
     MONITOR_PRIVILEGED: bool = True
 
+    # ---- Down-alert notifications ----
+    # Off by default; turn on once a channel below is configured.
+    ALERT_ENABLED: bool = False
+    # An IP must be down this many CONSECUTIVE sweeps before it counts as
+    # "confirmed down" — filters out brief blips / "few seconds off".
+    ALERT_FAIL_THRESHOLD: int = 3
+    # …and up this many consecutive sweeps before we announce recovery.
+    ALERT_RECOVER_THRESHOLD: int = 2
+    # Minimum minutes between repeat DOWN alerts for the SAME ip — flap damper.
+    ALERT_COOLDOWN_MINUTES: float = 30.0
+    # Mass-outage guard: if at least ALERT_MASS_OUTAGE_MIN IPs are tracked and
+    # at least this FRACTION of them are down in one sweep, treat it as a single
+    # monitoring-side / upstream event — send ONE aggregate alert, suppress the
+    # per-IP storm (handles "everything looks down for a few seconds").
+    ALERT_MASS_OUTAGE_RATIO: float = 0.5
+    ALERT_MASS_OUTAGE_MIN: int = 10
+    # Keep this many recent alert events in memory for the UI/endpoint.
+    ALERT_HISTORY_SIZE: int = 200
+
+    # Channel 1 — generic webhook (POST JSON). Works with Telegram bot proxies,
+    # Slack/Discord incoming webhooks, n8n, etc. Empty = disabled.
+    ALERT_WEBHOOK_URL: str = ""
+    # Channel 2 — SMTP email. All four must be set for email to send.
+    ALERT_SMTP_HOST: str = ""
+    ALERT_SMTP_PORT: int = 587
+    ALERT_SMTP_USER: str = ""
+    ALERT_SMTP_PASSWORD: str = ""
+    ALERT_SMTP_TLS: bool = True
+    ALERT_EMAIL_FROM: str = ""
+    ALERT_EMAIL_TO: str = ""        # comma-separated recipients
+
     # ---- Automatic backups ----
     BACKUP_ENABLED: bool = True
     BACKUP_INTERVAL_HOURS: float = 6.0     # how often to dump all tables to CSV

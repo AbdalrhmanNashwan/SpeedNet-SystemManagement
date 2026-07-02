@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.deps import get_db, get_current_user, require_role
+from app.core.deps import get_db, get_current_user, require_capability
 from app.crud.base import CRUDBase
 from app.crud import audit
 from app.models.zone import Zone
@@ -48,7 +48,7 @@ async def list_zones(db: AsyncSession = Depends(get_db), user: User = Depends(ge
 
 @router.post("", response_model=ZoneOut, status_code=201)
 async def create_zone(data: ZoneIn, db: AsyncSession = Depends(get_db),
-                      user: User = Depends(require_role("editor"))):
+                      user: User = Depends(require_capability("create", global_only=True))):
     obj = await crud.create(db, data.model_dump())
     await audit.log(db, user, "create", "zone", obj.id, data.model_dump())
     return obj
@@ -56,7 +56,7 @@ async def create_zone(data: ZoneIn, db: AsyncSession = Depends(get_db),
 
 @router.patch("/{zone_id}", response_model=ZoneOut)
 async def update_zone(zone_id: int, data: ZoneUpdate, db: AsyncSession = Depends(get_db),
-                      user: User = Depends(require_role("editor"))):
+                      user: User = Depends(require_capability("update", global_only=True))):
     obj = await crud.get(db, zone_id)
     if not obj:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Zone not found")
@@ -68,7 +68,7 @@ async def update_zone(zone_id: int, data: ZoneUpdate, db: AsyncSession = Depends
 
 @router.delete("/{zone_id}", status_code=204)
 async def delete_zone(zone_id: int, db: AsyncSession = Depends(get_db),
-                      user: User = Depends(require_role("editor"))):
+                      user: User = Depends(require_capability("delete", global_only=True))):
     obj = await crud.get(db, zone_id)
     if not obj:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Zone not found")
@@ -78,7 +78,7 @@ async def delete_zone(zone_id: int, db: AsyncSession = Depends(get_db),
 
 @router.post("/{zone_id}/recompute", response_model=dict)
 async def recompute_membership(zone_id: int, db: AsyncSession = Depends(get_db),
-                               user: User = Depends(require_role("editor"))):
+                               user: User = Depends(require_capability("update", global_only=True))):
     """Re-assign towers to this zone based on its rule (reseller/area = value)."""
     zone = await crud.get(db, zone_id)
     if not zone:

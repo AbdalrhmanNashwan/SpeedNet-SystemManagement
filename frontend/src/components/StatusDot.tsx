@@ -1,5 +1,6 @@
 import type { PingStatus } from "@/types";
 import { useForcePing } from "@/hooks/useMonitor";
+import { useT } from "@/i18n";
 
 const STYLE: Record<PingStatus, { dot: string; label: string; text: string }> = {
   up:      { dot: "bg-green shadow-[0_0_6px_var(--green)]", label: "Online",  text: "text-green" },
@@ -16,6 +17,7 @@ export function StatusDot({
   status, withLabel, title, ip,
 }: { status: PingStatus; withLabel?: boolean; title?: string; ip?: string }) {
   const s = STYLE[status];
+  const t = useT();
   const force = useForcePing();
   const busy = force.isPending;
 
@@ -24,14 +26,14 @@ export function StatusDot({
       <span className={`inline-block w-2 h-2 rounded-full ${s.dot} ${
         busy ? "animate-ping" : status === "up" ? "animate-pulse" : ""
       }`} />
-      {withLabel && <span className="text-[11px] font-bold">{s.label}</span>}
+      {withLabel && <span className="text-[11px] font-bold">{t(s.label)}</span>}
     </>
   );
 
   if (!ip) {
     return (
       <span className={`inline-flex items-center gap-1.5 ${withLabel ? s.text : ""}`}
-            title={title ?? s.label}>{content}</span>
+            title={title ?? t(s.label)}>{content}</span>
     );
   }
 
@@ -40,7 +42,7 @@ export function StatusDot({
       type="button"
       disabled={busy}
       onClick={(e) => { e.stopPropagation(); force.mutate(ip); }}
-      title={busy ? "Pinging…" : `${title ?? s.label} — click to re-ping`}
+      title={busy ? t("Pinging…") : `${title ?? t(s.label)} — ${t("click to re-ping")}`}
       className={`inline-flex items-center gap-1.5 cursor-pointer hover:opacity-80 disabled:cursor-wait ${withLabel ? s.text : ""}`}
     >
       {content}

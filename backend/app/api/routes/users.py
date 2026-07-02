@@ -29,6 +29,9 @@ class UserUpdate(BaseModel):
     zone_id: int | None = None
     is_active: bool | None = None
     password: str | None = Field(default=None, min_length=8)
+    can_create: bool | None = None
+    can_update: bool | None = None
+    can_delete: bool | None = None
 
 
 @router.get("", response_model=list[UserOut])
@@ -45,7 +48,9 @@ async def create_user(data: UserCreate, db: AsyncSession = Depends(get_db),
     if exists.scalar_one_or_none():
         raise HTTPException(status.HTTP_409_CONFLICT, "Email already registered")
     user = User(email=data.email, full_name=data.full_name, role=data.role,
-                zone_id=data.zone_id, hashed_password=hash_password(data.password))
+                zone_id=data.zone_id, hashed_password=hash_password(data.password),
+                can_create=data.can_create, can_update=data.can_update,
+                can_delete=data.can_delete)
     db.add(user); await db.commit(); await db.refresh(user)
     await audit.log(db, admin, "create", "user", user.id, {"email": data.email, "role": data.role})
     return user

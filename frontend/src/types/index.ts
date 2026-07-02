@@ -3,6 +3,7 @@ export type Role = "admin" | "editor" | "viewer" | "agent";
 export interface User {
   id: number; email: string; full_name: string | null;
   role: Role; zone_id: number | null; is_active: boolean;
+  can_create: boolean; can_update: boolean; can_delete: boolean;
 }
 
 export interface Tower {

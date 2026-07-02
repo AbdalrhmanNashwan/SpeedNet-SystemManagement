@@ -30,7 +30,8 @@ api.interceptors.response.use(
           return api(original);
         } catch {
           localStorage.clear();
-          window.location.href = "/login";
+          // hard redirect (not router) — must include the console's /console base
+          window.location.href = "/console/login";
         }
       }
     }

@@ -16,6 +16,9 @@ class UserOut(BaseModel):
     role: str
     zone_id: int | None
     is_active: bool
+    can_create: bool = False
+    can_update: bool = False
+    can_delete: bool = False
 
 
 class UserCreate(BaseModel):
@@ -24,3 +27,6 @@ class UserCreate(BaseModel):
     password: str = Field(min_length=8)
     role: str = "viewer"
     zone_id: int | None = None
+    can_create: bool = False
+    can_update: bool = False
+    can_delete: bool = False
