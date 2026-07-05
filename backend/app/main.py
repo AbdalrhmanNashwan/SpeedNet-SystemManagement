@@ -88,6 +88,9 @@ if _dist.is_dir():
 
     @app.get("/{full_path:path}")
     async def spa(full_path: str):
+        # Unknown API paths must get a consistent JSON 404 — never the SPA shell.
+        if full_path == "api" or full_path.startswith("api/"):
+            return JSONResponse(status_code=404, content={"detail": "Not Found"})
         # Serve a real static file if one exists (favicon, robots.txt, …),
         # otherwise fall back to index.html so the client-side router handles
         # the route (covers both "/" and "/console/…").
