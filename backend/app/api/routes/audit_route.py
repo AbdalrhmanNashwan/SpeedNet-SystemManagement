@@ -37,7 +37,11 @@ async def list_audit(limit: int = 100, offset: int = 0,
     if action:
         stmt = stmt.where(AuditLog.action == action)
     if q:
-        stmt = stmt.where(AuditLog.user_email.ilike(f"%{q}%"))
+        # The value is already parameterized by ilike(); escape LIKE wildcards
+        # so a '%' or '_' typed in the search is matched literally, not as a
+        # pattern (prevents wildcard/DoS-style over-matching).
+        like = q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        stmt = stmt.where(AuditLog.user_email.ilike(f"%{like}%", escape="\\"))
     stmt = stmt.limit(min(limit, 500)).offset(offset)
     res = await db.execute(stmt)
     return list(res.scalars().all())

@@ -16,7 +16,7 @@ import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
 
-from sqlalchemy import text, JSON
+from sqlalchemy import select, text, JSON
 
 from app.core.config import settings
 from app.db.base import Base
@@ -52,7 +52,9 @@ async def create_backup() -> Path:
                 cols = [c.name for c in table.columns if c.name not in _SKIP_COLUMNS]
                 if not cols:
                     continue
-                res = await conn.execute(text(f'SELECT {", ".join(cols)} FROM {table.name}'))
+                # Core SELECT over trusted schema columns — no raw SQL string.
+                # (Identifiers come from the app's own metadata, never user input.)
+                res = await conn.execute(select(*(table.c[name] for name in cols)))
                 rows = res.fetchall()
                 buf = io.StringIO()
                 writer = csv.writer(buf)
@@ -147,6 +149,9 @@ async def restore_backup(zip_bytes: bytes) -> dict:
                 await conn.execute(table.insert(), rows)
             summary[table.name] = len(rows)
             if "id" in table.columns:
+                # Raw SQL is unavoidable here (setval/sequence + MAX over a
+                # dynamic table). Safe: `table.name` is a trusted schema
+                # identifier from Base.metadata, never user input.
                 await conn.execute(text(
                     f"SELECT setval(pg_get_serial_sequence('{table.name}', 'id'), "
                     f"COALESCE((SELECT MAX(id) FROM {table.name}), 1))"
