@@ -1,5 +1,9 @@
 """IP monitor endpoints — read the in-memory ping cache, or force a single check."""
-from fastapi import APIRouter, Depends, HTTPException, status as http
+import time as _time
+from datetime import datetime, timezone
+
+from fastapi import APIRouter, Depends, Header, HTTPException, status as http
+from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -149,3 +153,94 @@ async def alerts(
         },
         "events": events,
     }
+
+
+# ---------------------------------------------------------------------------
+# External agent ingest.
+#
+# When the app runs somewhere it cannot reach the private device IPs (a cloud
+# host), an agent inside the network pings the devices and pushes results here.
+# The endpoints are authenticated with a shared token (MONITOR_AGENT_TOKEN), not
+# a user login, since the caller is a machine and not a person.
+# ---------------------------------------------------------------------------
+_refs_refreshed_at = 0.0
+
+
+def _require_agent(token: str | None) -> None:
+    if not settings.MONITOR_AGENT_TOKEN:
+        raise HTTPException(http.HTTP_503_SERVICE_UNAVAILABLE,
+                            "Agent ingest disabled (MONITOR_AGENT_TOKEN not set)")
+    if not token or token != settings.MONITOR_AGENT_TOKEN:
+        raise HTTPException(http.HTTP_401_UNAUTHORIZED, "Invalid agent token")
+
+
+async def _ensure_refs(force: bool = False) -> None:
+    """(Re)load the IP→refs map from the DB so ingested results carry sources
+    and deep-links, and stale IPs get dropped. Cached for MONITOR_REFRESH_IPS."""
+    global _refs_refreshed_at
+    stale = _time.monotonic() - _refs_refreshed_at >= settings.MONITOR_REFRESH_IPS
+    if force or stale or not monitor.state.refs:
+        monitor.state.refs = await monitor._collect_ips()
+        _refs_refreshed_at = _time.monotonic()
+
+
+class AgentResult(BaseModel):
+    ip: str
+    is_alive: bool
+    latency_ms: float | None = None
+    packet_loss: float | None = None
+
+
+class IngestBody(BaseModel):
+    results: list[AgentResult]
+
+
+@router.get("/targets")
+async def targets(x_agent_token: str | None = Header(None, alias="X-Agent-Token")):
+    """IP list the in-network agent should ping. Token-authenticated."""
+    _require_agent(x_agent_token)
+    await _ensure_refs(force=True)
+    return {"ips": sorted(monitor.state.refs.keys())}
+
+
+@router.post("/ingest")
+async def ingest(body: IngestBody,
+                 x_agent_token: str | None = Header(None, alias="X-Agent-Token")):
+    """Receive ping results from the in-network agent and update the live cache
+    that /monitor/status serves. Token-authenticated."""
+    _require_agent(x_agent_token)
+    await _ensure_refs()
+
+    st = monitor.state
+    now = datetime.now(timezone.utc).isoformat()
+    for r in body.results:
+        ip = monitor._parse_ip(r.ip) or r.ip
+        refs = st.refs.get(ip, [])
+        st.results[ip] = {
+            "ip": ip,
+            "status": "up" if r.is_alive else "down",
+            "latency_ms": round(r.latency_ms, 1) if (r.is_alive and r.latency_ms is not None) else None,
+            "packet_loss": r.packet_loss if r.packet_loss is not None else (0.0 if r.is_alive else 1.0),
+            "last_checked": now,
+            "sources": monitor._labels(refs),
+            "refs": refs,
+        }
+    # forget IPs that no longer exist in the DB
+    for ip in set(st.results) - set(st.refs):
+        st.results.pop(ip, None)
+
+    st.enabled = True
+    st.running = True
+    st.sweep_started_at = st.sweep_started_at or now
+    st.sweep_completed_at = now
+    st.cycle += 1
+    st.error = None
+
+    if settings.ALERT_ENABLED:
+        try:
+            from app.services.alerts import manager as alert_manager
+            await alert_manager.process_sweep(st.results)
+        except Exception:  # never let alerting break ingest
+            pass
+
+    return {"accepted": len(body.results), "total": len(st.results)}

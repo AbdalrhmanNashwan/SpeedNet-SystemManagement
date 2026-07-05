@@ -68,6 +68,11 @@ class Settings(BaseSettings):
     # Windows). Set False on Linux/macOS to use unprivileged ICMP datagram
     # sockets instead. Windows always needs privileged=True.
     MONITOR_PRIVILEGED: bool = True
+    # Shared secret for the external monitor AGENT (see scripts/monitor_agent.py).
+    # When the app is hosted somewhere that cannot reach the private device IPs
+    # (e.g. a cloud PaaS), an agent running INSIDE the network pings the devices
+    # and pushes status to /monitor/ingest using this token. Empty = disabled.
+    MONITOR_AGENT_TOKEN: str = ""
 
     # ---- Down-alert notifications ----
     # Off by default; turn on once a channel below is configured.
