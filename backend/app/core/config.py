@@ -1,5 +1,6 @@
 """Application settings, loaded from environment / .env."""
 from functools import lru_cache
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -8,6 +9,23 @@ class Settings(BaseSettings):
 
     # Database
     DATABASE_URL: str = "postgresql+asyncpg://speednet:changeme@db:5432/speednet"
+
+    @field_validator("DATABASE_URL", mode="after")
+    @classmethod
+    def _use_asyncpg(cls, v: str) -> str:
+        """Accept the plain postgres:// URLs that hosts like Render hand out and
+        convert them to the async driver SQLAlchemy needs. Also drops libpq's
+        ``sslmode`` query param, which asyncpg does not understand."""
+        if v.startswith("postgres://"):
+            v = "postgresql://" + v.split("://", 1)[1]
+        if v.startswith("postgresql://"):
+            v = "postgresql+asyncpg://" + v.split("://", 1)[1]
+        if "sslmode=" in v:
+            from urllib.parse import urlsplit, urlunsplit, parse_qsl, urlencode
+            parts = urlsplit(v)
+            q = [(k, val) for k, val in parse_qsl(parts.query) if k != "sslmode"]
+            v = urlunsplit(parts._replace(query=urlencode(q)))
+        return v
 
     # Auth
     SECRET_KEY: str = "CHANGE_ME_run_openssl_rand_hex_32"

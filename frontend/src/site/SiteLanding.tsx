@@ -255,6 +255,9 @@ export default function SiteLanding() {
             <a href="https://mail.google.com/mail/?view=cm&fs=1&to=abdalrhmannash.dev@gmail.com"
               target="_blank" rel="noopener noreferrer"
               className="text-cyan/90 hover:underline">abdalrhmannash.dev@gmail.com</a>
+            {" · "}
+            <a href="https://t.me/Abdalrhman20dev" target="_blank" rel="noopener noreferrer"
+              className="text-cyan/90 hover:underline">@Abdalrhman20dev</a>
           </span>
         </div>
       </section>

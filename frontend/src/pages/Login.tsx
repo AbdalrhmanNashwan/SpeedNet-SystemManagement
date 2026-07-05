@@ -90,6 +90,13 @@ export default function Login() {
               </svg>
               abdalrhmannash.dev@gmail.com
             </a>
+            <a href="https://t.me/Abdalrhman20dev" target="_blank" rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 mt-1.5 ml-3 text-cyan text-xs hover:underline">
+              <svg width="12" height="12" viewBox="0 0 16 16" fill="none" className="shrink-0">
+                <path d="M14.5 2.2 1.8 7.1c-.6.24-.6.86 0 1.05l3.05.95 1.18 3.7c.16.42.5.5.82.24l1.7-1.4 3.35 2.47c.4.3.9.1 1-.42l1.9-9.1c.13-.6-.36-1.05-.8-.9Z" stroke="currentColor" strokeLinejoin="round" />
+              </svg>
+              @Abdalrhman20dev
+            </a>
           </div>
         </div>
       </div>
@@ -163,6 +170,9 @@ export default function Login() {
             <br />
             <a href="mailto:abdalrhmannash.dev@gmail.com"
               className="text-cyan hover:underline">abdalrhmannash.dev@gmail.com</a>
+            {" · "}
+            <a href="https://t.me/Abdalrhman20dev" target="_blank" rel="noopener noreferrer"
+              className="text-cyan hover:underline">@Abdalrhman20dev</a>
           </p>
         </div>
       </div>

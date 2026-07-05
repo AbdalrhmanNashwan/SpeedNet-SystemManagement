@@ -1,10 +1,14 @@
 """FastAPI entrypoint."""
 import asyncio
 import logging
+import os
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
@@ -57,3 +61,28 @@ app.include_router(api_router, prefix=settings.API_PREFIX)
 @app.get("/health")
 async def health():
     return {"status": "ok"}
+
+
+# ---------------------------------------------------------------------------
+# Serve the built frontend (single-container / PaaS deploys).
+#
+# In local dev the frontend runs under Vite on its own port and this block is a
+# no-op (the dist directory does not exist). In the Docker image used for cloud
+# hosting, the built SPA is copied to ``FRONTEND_DIST`` and FastAPI serves it —
+# so the API (/api) and the app share one origin (no CORS, no proxy needed).
+# ---------------------------------------------------------------------------
+_dist = Path(os.getenv("FRONTEND_DIST", "/code/static"))
+if _dist.is_dir():
+    _assets = _dist / "assets"
+    if _assets.is_dir():
+        app.mount("/assets", StaticFiles(directory=_assets), name="assets")
+
+    @app.get("/{full_path:path}")
+    async def spa(full_path: str):
+        # Serve a real static file if one exists (favicon, robots.txt, …),
+        # otherwise fall back to index.html so the client-side router handles
+        # the route (covers both "/" and "/console/…").
+        candidate = (_dist / full_path).resolve()
+        if full_path and candidate.is_file() and candidate.is_relative_to(_dist.resolve()):
+            return FileResponse(candidate)
+        return FileResponse(_dist / "index.html")

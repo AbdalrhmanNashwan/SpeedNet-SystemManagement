@@ -127,6 +127,9 @@ function Footer() {
         {" · "}
         <a href="mailto:abdalrhmannash.dev@gmail.com"
           className="text-cyan hover:underline">abdalrhmannash.dev@gmail.com</a>
+        {" · "}
+        <a href="https://t.me/Abdalrhman20dev" target="_blank" rel="noopener noreferrer"
+          className="text-cyan hover:underline">@Abdalrhman20dev</a>
       </p>
     </footer>
   );

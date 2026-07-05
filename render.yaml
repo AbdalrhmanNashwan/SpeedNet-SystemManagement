@@ -1,0 +1,43 @@
+# Render blueprint — free test deployment of the SPEEDNeT Console.
+# One Docker web service (FastAPI serving the built React SPA) + a free
+# PostgreSQL instance. Push this repo to GitHub, then in Render:
+#   New +  ->  Blueprint  ->  pick this repo.
+#
+# Notes / free-tier caveats:
+#   * The web service SLEEPS after ~15 min idle (first hit is a slow cold start).
+#   * The free Postgres instance is DELETED after 30 days — fine for testing.
+#   * The Monitor page pings live devices; those private IPs are unreachable
+#     from the cloud (and raw ICMP is blocked on Render), so it stays disabled.
+databases:
+  - name: speednet-db
+    plan: free
+    databaseName: speednet
+    user: speednet
+
+services:
+  - type: web
+    name: speednet-console
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: speednet-db
+          property: connectionString
+      - key: SECRET_KEY
+        generateValue: true
+      - key: ADMIN_EMAIL
+        value: admin@speednet.iq
+      - key: ADMIN_PASSWORD
+        value: Admin2024!
+      # Disabled on the cloud: raw ICMP isn't available and target IPs are
+      # private/unreachable. Flip to true only on a host that can reach them.
+      - key: MONITOR_ENABLED
+        value: "false"
+      # Backups write to the container's ephemeral disk on free plans; keep off.
+      - key: BACKUP_ENABLED
+        value: "false"

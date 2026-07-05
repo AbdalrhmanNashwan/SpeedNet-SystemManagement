@@ -1,0 +1,18 @@
+# Keep the Docker build context small and secret-free.
+**/node_modules
+**/.venv
+**/__pycache__
+**/*.pyc
+**/dist
+.git
+.github
+.claude
+.vscode
+.idea
+data/
+backups/
+*.env
+!.env.example
+HOW_TO_RUN.md
+docs/
+deploy/
