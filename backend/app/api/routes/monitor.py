@@ -106,7 +106,9 @@ async def check(request: Request, ip: str, user: User = Depends(get_current_user
         refs = monitor.state.refs.get(norm) or monitor.state.results.get(norm, {}).get("refs", [])
         zone_of = await _zone_of_towers(db)
         if not _ip_in_agent_zone(refs, user.zone_id, zone_of):
-            raise HTTPException(http.HTTP_403_FORBIDDEN, "IP is not in your zone")
+            # 404 (not 403) so an out-of-zone agent can't tell whether the IP
+            # exists elsewhere in the system — no cross-zone existence oracle.
+            raise HTTPException(http.HTTP_404_NOT_FOUND, "IP is not part of the monitored set")
     result = await monitor.check_ip(ip)
     if result is None:
         raise HTTPException(http.HTTP_400_BAD_REQUEST, f"Not a valid IP: {ip}")

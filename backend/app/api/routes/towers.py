@@ -27,9 +27,11 @@ def _redact_for(user: User, out: TowerOut) -> TowerOut:
 
 def _check_scope(user: User, tower: Tower):
     """Agents may only touch towers in their zone. An agent with no zone
-    assigned has no scope at all — deny, don't fall through to "everything"."""
+    assigned has no scope at all — deny, don't fall through to "everything".
+    Returns 404 (not 403) so an out-of-zone agent can't use the response to
+    confirm a tower exists in another zone (no cross-zone existence oracle)."""
     if user.role == "agent" and (user.zone_id is None or tower.zone_id != user.zone_id):
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "Outside your zone")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Tower not found")
 
 
 @router.get("", response_model=list[TowerOut])
