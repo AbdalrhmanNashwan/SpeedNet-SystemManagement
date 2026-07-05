@@ -25,6 +25,9 @@ COPY backend/ .
 # built SPA served by FastAPI (see app/main.py -> FRONTEND_DIST)
 COPY --from=frontend /fe/dist ./static
 ENV FRONTEND_DIST=/code/static
+# make the `app` package importable for alembic / scripts (cwd isn't on the
+# path when console entrypoints like `alembic` run)
+ENV PYTHONPATH=/code
 
 EXPOSE 8000
 CMD ["sh", "/code/scripts/start.sh"]
