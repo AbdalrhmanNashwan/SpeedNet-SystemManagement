@@ -1,3 +1,16 @@
+---
+title: SPEEDNeT Console
+emoji: 📡
+colorFrom: gray
+colorTo: yellow
+sdk: docker
+app_port: 8000
+pinned: false
+---
+
+<!-- The YAML block above configures a free Hugging Face Docker Space (see
+     HF_DEPLOY.md). It's ignored by the app and by GitHub's content. -->
+
 # SPEEDNeT Console
 
 A network management console for SPEEDNeT ISP — turns a messy 188-sheet Google

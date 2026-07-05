@@ -20,10 +20,20 @@ class Settings(BaseSettings):
             v = "postgresql://" + v.split("://", 1)[1]
         if v.startswith("postgresql://"):
             v = "postgresql+asyncpg://" + v.split("://", 1)[1]
-        if "sslmode=" in v:
+        # Managed hosts (Neon, Supabase, …) hand out libpq-style query params.
+        # asyncpg/SQLAlchemy use `ssl=` instead of `sslmode=`, and don't know
+        # `channel_binding` at all — translate so SSL-required DBs still connect.
+        if "sslmode=" in v or "channel_binding=" in v:
             from urllib.parse import urlsplit, urlunsplit, parse_qsl, urlencode
             parts = urlsplit(v)
-            q = [(k, val) for k, val in parse_qsl(parts.query) if k != "sslmode"]
+            q = []
+            for k, val in parse_qsl(parts.query):
+                if k == "sslmode":
+                    q.append(("ssl", val))       # e.g. require / verify-full
+                elif k == "channel_binding":
+                    continue                      # unsupported — drop
+                else:
+                    q.append((k, val))
             v = urlunsplit(parts._replace(query=urlencode(q)))
         return v
 
