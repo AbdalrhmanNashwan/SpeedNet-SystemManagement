@@ -1,6 +1,10 @@
 """Backup management — admin only. List / trigger / download / restore archives."""
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, status
 from fastapi.responses import FileResponse
+
+log = logging.getLogger("uvicorn.error")
 
 from app.core.config import settings
 from app.core.deps import require_role
@@ -21,7 +25,9 @@ async def list_backups(admin: User = Depends(require_role("admin"))):
     for f in sorted(d.glob("backup_*.zip"), reverse=True):
         st = f.stat()
         items.append({"name": f.name, "size_bytes": st.st_size, "mtime": st.st_mtime})
-    return {"dir": str(d), "count": len(items), "backups": items}
+    # Note: the absolute backup directory path is deliberately NOT returned —
+    # no need to disclose server filesystem paths to the client.
+    return {"count": len(items), "backups": items}
 
 
 @router.post("/run")
@@ -50,8 +56,12 @@ async def restore_backup(confirm: bool = False,
     data = await file.read()
     try:
         summary = await backup.restore_backup(data)
-    except Exception as exc:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, f"Restore failed: {exc}")
+    except Exception:
+        # Full detail (which may include DB/schema/path internals) goes to the
+        # server log only — the client gets a safe, generic message.
+        log.exception("backup restore failed for %r", file.filename)
+        raise HTTPException(status.HTTP_400_BAD_REQUEST,
+                            "Restore failed — the archive is invalid or corrupt")
     await audit.log(db, admin, "restore", "backup", None,
                     {"file": file.filename, "rows": summary})
     return {"restored": summary}

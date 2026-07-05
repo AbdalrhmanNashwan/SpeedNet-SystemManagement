@@ -311,8 +311,10 @@ async def run_monitor() -> None:
                     await asyncio.sleep(settings.MONITOR_CYCLE_GAP)
             except asyncio.CancelledError:
                 raise
-            except Exception as exc:  # never let the loop die
-                state.error = str(exc)
+            except Exception:  # never let the loop die
+                # Generic message for the client (shown on the Monitor page);
+                # the real exception is logged server-side only.
+                state.error = "monitor sweep failed — see server logs"
                 log.exception("monitor: sweep failed")
             await asyncio.sleep(settings.MONITOR_CYCLE_GAP)
     except asyncio.CancelledError:
