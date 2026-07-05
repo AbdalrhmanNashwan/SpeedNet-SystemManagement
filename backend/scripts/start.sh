@@ -19,4 +19,8 @@ echo "-> Ensuring admin user…"
 python scripts/create_admin.py "${ADMIN_EMAIL:-admin@speednet.local}" "${ADMIN_PASSWORD:-changeme}" || true
 
 echo "-> Starting server on port ${PORT:-8000}…"
-exec uvicorn app.main:app --host 0.0.0.0 --port "${PORT:-8000}"
+# --proxy-headers + --forwarded-allow-ips lets the app see the real client IP
+# from X-Forwarded-For (set by Caddy / the host's proxy) instead of the proxy's
+# own IP — so per-IP login rate limiting actually works in production.
+exec uvicorn app.main:app --host 0.0.0.0 --port "${PORT:-8000}" \
+  --proxy-headers --forwarded-allow-ips="*"
