@@ -2,7 +2,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.deps import get_db, get_current_user, require_capability
+from app.core.deps import get_db, get_current_user, require_capability, ROLE_LEVEL
 from app.crud.base import CRUDBase
 from app.crud import audit
 from app.models.tower import Tower
@@ -11,6 +11,18 @@ from app.schemas.tower import TowerCreate, TowerUpdate, TowerOut
 
 router = APIRouter(prefix="/towers", tags=["towers"])
 crud = CRUDBase(Tower)
+
+# Credential fields that read-only viewers must not receive (mirrors the
+# devices route). Below "agent" level = viewer.
+_SECRET_FIELDS = ("admin_pass",)
+
+
+def _redact_for(user: User, out: TowerOut) -> TowerOut:
+    """Blank out tower credentials for read-only viewers (< agent)."""
+    if ROLE_LEVEL.get(user.role, 0) < ROLE_LEVEL["agent"]:
+        for f in _SECRET_FIELDS:
+            setattr(out, f, None)
+    return out
 
 
 def _check_scope(user: User, tower: Tower):
@@ -31,7 +43,8 @@ async def list_towers(zone_id: int | None = None, area: str | None = None,
         if user.zone_id is None:
             return []
         zone_id = user.zone_id
-    return await crud.list(db, zone_id=zone_id, area=area, reseller=reseller, status=status_)
+    rows = await crud.list(db, zone_id=zone_id, area=area, reseller=reseller, status=status_)
+    return [_redact_for(user, TowerOut.model_validate(t)) for t in rows]
 
 
 @router.get("/{tower_id}", response_model=TowerOut)
@@ -41,7 +54,7 @@ async def get_tower(tower_id: int, db: AsyncSession = Depends(get_db),
     if not obj:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Tower not found")
     _check_scope(user, obj)
-    return obj
+    return _redact_for(user, TowerOut.model_validate(obj))
 
 
 @router.post("", response_model=TowerOut, status_code=201)
