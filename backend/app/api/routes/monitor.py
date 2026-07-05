@@ -2,13 +2,14 @@
 import time as _time
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, Header, HTTPException, status as http
+from fastapi import APIRouter, Depends, Header, HTTPException, Request, status as http
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import get_current_user, get_db
 from app.core.config import settings
+from app.core.limiter import limiter
 from app.models.user import User
 from app.models.tower import Tower
 from app.services import monitor
@@ -88,7 +89,8 @@ async def status(user: User = Depends(get_current_user),
 
 
 @router.post("/check")
-async def check(ip: str, user: User = Depends(get_current_user),
+@limiter.limit("30/minute")
+async def check(request: Request, ip: str, user: User = Depends(get_current_user),
                 db: AsyncSession = Depends(get_db)):
     """Ping one IP immediately and return its fresh result (also updates cache).
 
