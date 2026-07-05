@@ -43,7 +43,12 @@ class ZoneOut(ZoneIn):
 
 @router.get("", response_model=list[ZoneOut])
 async def list_zones(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
-    return await crud.list(db)
+    zones = await crud.list(db)
+    # agents are zone-scoped: they only get their own zone, not the whole
+    # company-wide list of zone names/rules.
+    if user.role == "agent":
+        zones = [z for z in zones if z.id == user.zone_id]
+    return zones
 
 
 @router.post("", response_model=ZoneOut, status_code=201)
