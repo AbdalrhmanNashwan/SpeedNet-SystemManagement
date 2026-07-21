@@ -14,6 +14,15 @@ router = APIRouter(prefix="/users", tags=["users"])
 
 VALID_ROLES = {"viewer", "agent", "editor", "admin"}
 
+# The permanent owner account. It can never have its admin access revoked, be
+# deactivated, or be deleted, and only the owner themselves may edit it — not even
+# another admin. This is the super-admin safety net. Compared case-insensitively.
+OWNER_EMAIL = "abdalrhmannash.dev@gmail.com"
+
+
+def _is_owner(email: str | None) -> bool:
+    return (email or "").strip().lower() == OWNER_EMAIL
+
 
 def _check_role(role: str | None):
     if role is not None and role not in VALID_ROLES:
@@ -64,6 +73,19 @@ async def update_user(user_id: int, data: UserUpdate, db: AsyncSession = Depends
     if not user:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found")
     _check_role(data.role)
+    # Protect the owner account: only the owner may edit it, and even they can't
+    # strip its admin role or deactivate it.
+    if _is_owner(user.email):
+        if not _is_owner(admin.email):
+            raise HTTPException(
+                status.HTTP_403_FORBIDDEN,
+                "The owner account is protected and cannot be modified by other users.",
+            )
+        if (data.role is not None and data.role != "admin") or data.is_active is False:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                "The owner account must remain an active admin.",
+            )
     # don't let the last admin demote or deactivate themselves out of access
     if user.id == admin.id and (
         (data.role is not None and data.role != "admin") or data.is_active is False
@@ -85,11 +107,14 @@ async def update_user(user_id: int, data: UserUpdate, db: AsyncSession = Depends
 @router.delete("/{user_id}", status_code=204)
 async def delete_user(user_id: int, db: AsyncSession = Depends(get_db),
                       admin: User = Depends(require_role("admin"))):
-    if user_id == admin.id:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "You can't delete yourself")
     res = await db.execute(select(User).where(User.id == user_id))
     user = res.scalar_one_or_none()
     if not user:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found")
+    if _is_owner(user.email):
+        raise HTTPException(status.HTTP_403_FORBIDDEN,
+                            "The owner account is protected and cannot be deleted.")
+    if user_id == admin.id:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "You can't delete yourself")
     await audit.log(db, admin, "delete", "user", user_id, {"email": user.email})
     await db.delete(user); await db.commit()

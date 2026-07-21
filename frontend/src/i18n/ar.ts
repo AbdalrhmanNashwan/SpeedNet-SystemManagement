@@ -311,6 +311,7 @@ export const ar: Record<string, string> = {
   "Active": "مُفعّل",
   "Inactive": "معطّل",
   "Permissions": "الصلاحيات",
+  "Protected owner account": "حساب المالك محمي",
   "Full access": "صلاحية كاملة",
   "Add, edit & delete": "إضافة وتعديل وحذف",
   "View only": "عرض فقط",

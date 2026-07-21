@@ -7,6 +7,11 @@ import type { User, Role } from "@/types";
 
 const ROLES: Role[] = ["admin", "editor", "viewer", "agent"];
 
+// The protected owner account — the backend forbids changing its role, active
+// state, or deleting it. Mirror that here so the controls are locked in the UI.
+const OWNER_EMAIL = "abdalrhmannash.dev@gmail.com";
+const isOwner = (email: string) => email.trim().toLowerCase() === OWNER_EMAIL;
+
 // Capability-first labels so an admin picks by what the user can DO.
 const ROLE_LABELS: Record<Role, string> = {
   admin: "Admin — full access",
@@ -203,11 +208,21 @@ export default function Users() {
               </tr>
             </thead>
             <tbody>
-              {users?.map((u) => (
+              {users?.map((u) => {
+                const owner = isOwner(u.email);
+                return (
                 <tr key={u.id} className="border-b border-line/50 hover:bg-panel2/50">
-                  <td className="px-4 py-3 font-mono text-xs">{u.email}</td>
+                  <td className="px-4 py-3 font-mono text-xs">
+                    {u.email}
+                    {owner && <span className="ms-2 text-[10px] font-extrabold text-amber uppercase tracking-wide">{t("Owner")}</span>}
+                  </td>
                   <td className="px-4 py-3">{u.full_name ?? "—"}</td>
                   <td className="px-4 py-3">
+                    {owner ? (
+                      <span className={`text-xs font-bold ${ROLE_COLORS.admin}`} title={t("Protected owner account")}>
+                        {t(ROLE_LABELS.admin)}
+                      </span>
+                    ) : (
                     <select
                       value={u.role}
                       onChange={(e) => {
@@ -219,6 +234,7 @@ export default function Users() {
                     >
                       {ROLES.map((r) => <option key={r} value={r} className="text-text">{t(ROLE_LABELS[r])}</option>)}
                     </select>
+                    )}
                   </td>
                   <td className="px-4 py-3 text-muted">
                     {u.role === "agent" ? (
@@ -249,23 +265,32 @@ export default function Users() {
                     )}
                   </td>
                   <td className="px-4 py-3">
+                    {owner ? (
+                      <span className="text-xs font-bold text-green" title={t("Protected owner account")}>{t("Active")}</span>
+                    ) : (
                     <button
                       onClick={() => updateUser.mutate({ id: u.id, patch: { is_active: !u.is_active } })}
                       className={`text-xs font-bold ${u.is_active ? "text-green" : "text-red"} hover:underline`}
                     >
                       {u.is_active ? t("Active") : t("Inactive")}
                     </button>
+                    )}
                   </td>
                   <td className="px-4 py-3 text-end">
+                    {owner ? (
+                      <span className="text-xs text-muted2" title={t("Protected owner account")}>🔒</span>
+                    ) : (
                     <button
                       onClick={() => { if (confirm(t("Delete user {email}?", { email: u.email }))) deleteUser.mutate(u.id); }}
                       className="text-xs text-red hover:underline"
                     >
                       {t("Delete")}
                     </button>
+                    )}
                   </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </div>
