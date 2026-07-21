@@ -91,10 +91,14 @@ async def update_device(dtype: str, id: int, data: DeviceUpdate,
     if "tower_id" in data.model_dump(exclude_unset=True):  # allow moving tower
         await _agent_scope(db, user, data.tower_id)  # destination must also be in scope
         changes["tower_id"] = data.tower_id
+    delta = audit.diff(obj, changes)          # before/after — capture before mutating
     for k, v in changes.items():
         setattr(obj, k, v)
     await db.commit(); await db.refresh(obj)
-    await audit.log(db, user, "update", dtype, id, changes)
+    # record the (post-update) tower as plain context so History can deep-link
+    # the row to this device on its tower page.
+    delta.setdefault("tower_id", obj.tower_id)
+    await audit.log(db, user, "update", dtype, id, delta)
     return obj
 
 
@@ -107,7 +111,9 @@ async def delete_device(dtype: str, id: int, db: AsyncSession = Depends(get_db),
     if not obj:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Device not found")
     await _agent_scope(db, user, obj.tower_id)
-    await audit.log(db, user, "delete", dtype, id, {"ip": getattr(obj, "ip", None)})
+    # keep tower_id so History can still link the (now-gone) device to its tower.
+    await audit.log(db, user, "delete", dtype, id,
+                    {"ip": getattr(obj, "ip", None), "tower_id": obj.tower_id})
     await db.delete(obj); await db.commit()
 
 

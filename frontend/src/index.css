@@ -1,4 +1,4 @@
-@import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Sans+Arabic:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Sans+Arabic:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&family=Space+Grotesk:wght@500;600;700&display=swap");
 
 @tailwind base;
 @tailwind components;
@@ -7,6 +7,22 @@
 /* Weight discipline: hierarchy comes from 400/500/600 only — heavy weights
    used across older components are clamped to semibold. */
 .font-bold, .font-extrabold, .font-black, b, strong { font-weight: 600; }
+
+/* Display face (Space Grotesk) for headings across the app AND the marketing
+   site — the body stays IBM Plex Sans. Headings are the only place the two
+   diverge, which is what gives the type real hierarchy/personality. Arabic
+   headings fall through to IBM Plex Sans Arabic via the --font-display stack.
+   The slight negative tracking is deliberate: Space Grotesk sets a touch wide,
+   and tightening large text is what reads as "designed" rather than default. */
+h1, h2, h3, h4, .font-display {
+  font-family: var(--font-display);
+  letter-spacing: -0.018em;
+}
+/* Arabic sets tighter tracking wrong — never letterspace Arabic script. */
+:lang(ar) h1, :lang(ar) h2, :lang(ar) h3, :lang(ar) h4,
+[dir="rtl"] h1, [dir="rtl"] h2, [dir="rtl"] h3, [dir="rtl"] h4 {
+  letter-spacing: normal;
+}
 
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(6px); }

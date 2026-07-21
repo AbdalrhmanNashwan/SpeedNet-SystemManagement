@@ -1,19 +1,24 @@
-import { useState, type ReactNode } from "react";
+import { useState, lazy, Suspense, type ReactNode } from "react";
 import { BrowserRouter, Routes, Route, Navigate, NavLink, useNavigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/hooks/useAuth";
 import SiteApp from "@/site/SiteApp";
 import Login from "@/pages/Login";
-import Home from "@/pages/Home";
-import ZonePage from "@/pages/ZonePage";
-import TowerList from "@/pages/TowerList";
-import TowerDetail from "@/pages/TowerDetail";
-import DeviceList from "@/pages/DeviceList";
-import SearchResults from "@/pages/SearchResults";
-import Monitor from "@/pages/Monitor";
-import IpAllocations from "@/pages/IpAllocations";
-import History from "@/pages/History";
-import Users from "@/pages/Users";
-import Backups from "@/pages/Backups";
+
+// Route components are code-split so the initial bundle stays small and the
+// heavy map (leaflet) is only downloaded when someone opens /map.
+const Home = lazy(() => import("@/pages/Home"));
+const ZonePage = lazy(() => import("@/pages/ZonePage"));
+const TowerList = lazy(() => import("@/pages/TowerList"));
+const TowerDetail = lazy(() => import("@/pages/TowerDetail"));
+const DeviceList = lazy(() => import("@/pages/DeviceList"));
+const SearchResults = lazy(() => import("@/pages/SearchResults"));
+const Monitor = lazy(() => import("@/pages/Monitor"));
+const TowersMap = lazy(() => import("@/pages/TowersMap"));
+const SourceSwitches = lazy(() => import("@/pages/SourceSwitches"));
+const IpAllocations = lazy(() => import("@/pages/IpAllocations"));
+const History = lazy(() => import("@/pages/History"));
+const Users = lazy(() => import("@/pages/Users"));
+const Backups = lazy(() => import("@/pages/Backups"));
 import { Toaster } from "@/components/Toaster";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { NotificationBell } from "@/components/NotificationBell";
@@ -49,6 +54,8 @@ function Nav() {
     { to: "/devices/switches", label: t("Switches") },
     { to: "/devices/sectors", label: t("Sectors") },
     { to: "/monitor", label: t("Monitor") },
+    { to: "/map", label: t("Map") },
+    { to: "/sources", label: t("Sources") },
     ...(user.role === "admin" ? [{ to: "/history", label: t("History") }, { to: "/users", label: t("Users") }, { to: "/backups", label: t("Backups") }] : []),
   ];
 
@@ -141,6 +148,7 @@ function AppRoutes() {
   return (
     <>
       <Nav />
+      <Suspense fallback={<div className="p-10 text-muted">Loading…</div>}>
       <Routes>
         <Route path="/login" element={user ? <Navigate to="/" replace /> : <Login />} />
         <Route path="/" element={<Guard><Home /></Guard>} />
@@ -150,12 +158,15 @@ function AppRoutes() {
         <Route path="/devices/:type" element={<Guard><DeviceList /></Guard>} />
         <Route path="/search" element={<Guard><SearchResults /></Guard>} />
         <Route path="/monitor" element={<Guard><Monitor /></Guard>} />
+        <Route path="/map" element={<Guard><TowersMap /></Guard>} />
+        <Route path="/sources" element={<Guard><SourceSwitches /></Guard>} />
         <Route path="/ip-allocations" element={<Guard ipAccess><IpAllocations /></Guard>} />
         <Route path="/history" element={<Guard adminOnly><History /></Guard>} />
         <Route path="/users" element={<Guard adminOnly><Users /></Guard>} />
         <Route path="/backups" element={<Guard adminOnly><Backups /></Guard>} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
+      </Suspense>
       <Footer />
     </>
   );

@@ -11,6 +11,13 @@
   --blue:#E08D3C; --cyan:#E08D3C; --green:#34D399; --yellow:#94A3B8; --orange:#E08D3C;
   --red:#F87171; --purple:#A78BFA;
   --shadow:0 8px 24px rgba(0,0,0,.35); --radius:8px;
+  /* Type system — one source of truth (Tailwind fontFamily reads these too).
+     Body: IBM Plex Sans (Latin) + IBM Plex Sans Arabic (Arabic).
+     Display/headings: Space Grotesk, with Plex Arabic for Arabic headings.
+     Mono: IBM Plex Mono for IPs / VLANs / coordinates. */
+  --font-sans:"IBM Plex Sans","IBM Plex Sans Arabic",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --font-display:"Space Grotesk","IBM Plex Sans Arabic",system-ui,sans-serif;
+  --font-mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
 }
 /* Light theme — overrides the tokens above when <html data-theme="light"> */
 :root[data-theme="light"]{
@@ -24,7 +31,7 @@
 *{box-sizing:border-box;margin:0;padding:0}
 body{
   min-height:100vh;color:var(--text);background:var(--bg);
-  font-family:"IBM Plex Sans",Inter,system-ui,-apple-system,"Segoe UI",sans-serif;
+  font-family:var(--font-sans);
   font-size:14px;
   transition:background-color .35s ease,color .35s ease;
 }

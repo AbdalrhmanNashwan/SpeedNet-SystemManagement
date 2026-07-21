@@ -143,6 +143,10 @@ export const ar: Record<string, string> = {
   "Target": "الهدف",
   "Username": "اسم المستخدم",
   "Port": "المنفذ",
+  "Subnet": "قناع الشبكة",
+  "Serial": "الرقم التسلسلي",
+  "Unlock Code": "رمز فك القفل",
+  "WiFi Pass": "كلمة مرور الواي فاي",
   "URL": "الرابط",
 
   // ---- Search ----
@@ -450,4 +454,31 @@ export const ar: Record<string, string> = {
   "Support hours: every day, 9:00 — 21:00": "أوقات الدعم: يومياً، 9:00 — 21:00",
   "All rights reserved.": "جميع الحقوق محفوظة.",
   "Developed by": "تطوير",
+
+  // ---- Towers Map ----
+  "Map": "الخريطة",
+  "Towers Map": "خريطة الأبراج",
+  "{mapped} of {total} towers have coordinates": "{mapped} من أصل {total} برجاً لها إحداثيات",
+  "{n} online": "{n} متصل",
+  "{n} partly offline": "{n} انقطاع جزئي",
+  "{n} mostly offline": "{n} انقطاع كبير",
+  "{n} offline": "{n} غير متصل",
+  "{n} unknown": "{n} غير معروف",
+  "Partly offline": "انقطاع جزئي",
+  "Mostly offline": "انقطاع كبير",
+  "lines show parent links": "الخطوط تُظهر الوصلات الأصل",
+  "Failed to load towers.": "تعذّر تحميل الأبراج.",
+  "No towers have valid GPS coordinates yet.": "لا توجد أبراج ذات إحداثيات صالحة بعد.",
+  "Open tower": "فتح البرج",
+  "Open": "فتح",
+
+  // ---- Location picker ----
+  "📍 Pick location on map": "📍 تحديد الموقع على الخريطة",
+  "Pick location on map": "تحديد الموقع على الخريطة",
+  "Click the map to drop a marker": "انقر على الخريطة لوضع علامة",
+  "Use my current location": "استخدام موقعي الحالي",
+  "Save location": "حفظ الموقع",
+  "Close": "إغلاق",
+  "Location is not available on this device": "خدمة تحديد الموقع غير متوفرة على هذا الجهاز",
+  "Couldn't get your location": "تعذّر الحصول على موقعك",
 };

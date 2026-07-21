@@ -77,7 +77,7 @@ export function DeviceTable({
                   {t(c.label)}
                 </th>
               ))}
-              {canAct && <th className="sticky top-0 z-10 bg-panel border-b border-line" />}
+              {canAct && <th className="sticky top-0 end-0 z-20 bg-panel border-b border-s border-line" />}
             </tr>
           </thead>
           <tbody>
@@ -118,7 +118,7 @@ export function DeviceTable({
                     );
                   })}
                   {canAct && (
-                    <td className="px-3 py-2 border-b border-line/50 whitespace-nowrap text-end">
+                    <td className={`sticky end-0 z-10 ${sel ? "bg-panel2" : "bg-bg"} border-b border-s border-line/50 px-3 py-2 whitespace-nowrap text-end`}>
                       {canUpdate && <button onClick={() => onTransfer([r])} className="text-cyan text-xs me-3 hover:underline">{t("Transfer")}</button>}
                       {canDelete && <button onClick={() => { if (confirm(t("Delete this row?"))) del.mutate(r.id); }} className="text-red text-xs hover:underline">{t("Delete")}</button>}
                     </td>

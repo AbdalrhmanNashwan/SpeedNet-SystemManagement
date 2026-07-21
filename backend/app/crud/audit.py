@@ -8,15 +8,41 @@ from app.models.user import User
 _SECRET_HINTS = ("pass", "secret", "unlock_code")
 
 
+def _is_secret(key: str) -> bool:
+    return any(h in key.lower() for h in _SECRET_HINTS)
+
+
+def _mask(val):
+    return "***" if val not in (None, "", [], {}) else val
+
+
 def _redact(changes: dict | None) -> dict | None:
     if not changes:
         return changes
     out = {}
     for k, v in changes.items():
-        if v not in (None, "", [], {}) and any(h in k.lower() for h in _SECRET_HINTS):
-            out[k] = "***"
+        secret = _is_secret(k)
+        # before/after shape: {"from": old, "to": new} — mask both sides
+        if isinstance(v, dict) and ("from" in v or "to" in v):
+            out[k] = {side: (_mask(val) if secret else val) for side, val in v.items()}
+        elif secret:
+            out[k] = _mask(v)
         else:
             out[k] = v
+    return out
+
+
+def diff(before: object, changes: dict) -> dict:
+    """Turn a patch dict into ``{field: {"from": old, "to": new}}`` for the
+    History page, reading the object's *current* (pre-update) attributes for the
+    old values. Only fields that actually change are kept. MUST be called before
+    the object is mutated. Non-diff context keys can be merged in by the caller
+    afterwards (they render as plain values)."""
+    out: dict = {}
+    for k, new in changes.items():
+        old = getattr(before, k, None)
+        if old != new:
+            out[k] = {"from": old, "to": new}
     return out
 
 

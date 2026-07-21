@@ -6,6 +6,7 @@ import { usePerms } from "@/hooks/usePerms";
 import { DeviceTable } from "@/components/DeviceTable";
 import { TransferDialog } from "@/components/TransferDialog";
 import { Breadcrumbs } from "@/components/Breadcrumbs";
+import { Icon } from "@/components/Icon";
 import { SECTION_BY_TYPE } from "@/lib/deviceSections";
 import { useT } from "@/i18n";
 import type { Device, DeviceType, Tower } from "@/types";
@@ -39,10 +40,10 @@ export default function DeviceList() {
     <main className="max-w-5xl mx-auto px-4 sm:px-6 py-10">
       <Breadcrumbs items={[
         { label: t("Home"), to: "/", icon: "🏠" },
-        { label: t(section.label), icon: section.icon },
+        { label: t(section.label) },
       ]} />
       <div className="flex items-center gap-3 mb-8">
-        <span className="text-4xl">{section.icon}</span>
+        <Icon name={section.icon} className="w-9 h-9 text-cyan" />
         <div>
           <h1 className="text-2xl font-extrabold">{t(section.label)}</h1>
           <p className="text-muted text-sm">{t(ordered.length === 1 ? "{n} across {t} tower" : "{n} across {t} towers", { n: rows?.length ?? 0, t: ordered.length })}</p>

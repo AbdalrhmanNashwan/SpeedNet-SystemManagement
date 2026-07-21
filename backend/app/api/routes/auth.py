@@ -6,7 +6,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import get_db, get_current_user
 from app.core.limiter import limiter
-from app.core.security import (verify_password, create_access_token,
+from app.core import loginlock
+from app.core.security import (verify_password, dummy_verify, create_access_token,
                                create_refresh_token, decode_token)
 from app.models.user import User
 from app.schemas.auth import Token, UserOut
@@ -22,12 +23,29 @@ class RefreshIn(BaseModel):
 @router.post("/login", response_model=Token)
 @limiter.limit("5/minute")
 async def login(request: Request, form: OAuth2PasswordRequestForm = Depends(), db: AsyncSession = Depends(get_db)):
+    # Account-scoped lockout, on top of the per-IP rate limit above — stops an
+    # attacker with rotating IPs from grinding a single known account.
+    wait = loginlock.retry_after(form.username)
+    if wait > 0:
+        raise HTTPException(
+            status.HTTP_429_TOO_MANY_REQUESTS,
+            "Too many failed attempts. Try again later.",
+            headers={"Retry-After": str(wait)},
+        )
     res = await db.execute(select(User).where(User.email == form.username))
     user = res.scalar_one_or_none()
-    if not user or not verify_password(form.password, user.hashed_password):
+    # Always do exactly one bcrypt verify so response timing is uniform whether
+    # the email is unknown, the account is inactive, or the password is wrong —
+    # none of those states is distinguishable by a caller.
+    if user is not None:
+        password_ok = verify_password(form.password, user.hashed_password)
+    else:
+        dummy_verify(form.password)   # unknown email: spend the same work
+        password_ok = False
+    if not user or not user.is_active or not password_ok:
+        loginlock.record_failure(form.username)
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Incorrect email or password")
-    if not user.is_active:
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "User is inactive")
+    loginlock.clear(form.username)
     return Token(
         access_token=create_access_token(user.id, user.role, user.token_version),
         refresh_token=create_refresh_token(user.id, user.role, user.token_version),

@@ -1,10 +1,46 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { useAudit } from "@/hooks/useAudit";
 import { Breadcrumbs } from "@/components/Breadcrumbs";
 import { useT } from "@/i18n";
 import type { AuditEntry } from "@/types";
 
 const PAGE = 100;
+
+// Device entities live on their tower's page and are deep-linked with
+// ?focus=<type>:<id> (TowerDetail highlights + scrolls to the row).
+const DEVICE_ENTITIES = new Set(["links", "switches", "sectors", "servers"]);
+
+/** Read the tower id an entry's changes point at. `tower_id` is stored either
+ *  as a plain value or, when it changed, as {from, to} — use the current (to)
+ *  side so the link lands where the device is now. */
+function towerIdOf(changes: Record<string, unknown> | null): number | null {
+  const v = changes?.tower_id;
+  if (v == null) return null;
+  const raw = typeof v === "object" && v !== null && "to" in v
+    ? (v as { to: unknown }).to : v;
+  const n = Number(raw);
+  return Number.isFinite(n) ? n : null;
+}
+
+/** Where "Open" should navigate for an audit entry, or null when there's
+ *  nowhere to go — deletes (the thing is gone) and entries missing the ids we'd
+ *  need to build a link. */
+function targetFor(r: AuditEntry): string | null {
+  if (r.action === "delete" || r.entity_id == null) return null;
+  const id = r.entity_id;
+  if (DEVICE_ENTITIES.has(r.entity)) {
+    const tid = towerIdOf(r.changes);
+    return tid != null ? `/tower/${tid}?focus=${r.entity}:${id}` : null;
+  }
+  switch (r.entity) {
+    case "tower": return `/tower/${id}`;
+    case "zone": return `/zone/${id}`;
+    case "ip_allocation": return `/ip-allocations?focus=${id}`;
+    case "user": return "/users";
+    default: return null;
+  }
+}
 
 const ACTION_STYLE: Record<string, string> = {
   create: "text-green border-green/40 bg-green/10",
@@ -100,10 +136,13 @@ export default function History() {
                 {["When", "User", "Action", "Type", "ID", "Details"].map((h) => (
                   <th key={h} className="sticky top-0 z-10 bg-panel text-start px-3 py-2 text-[9.5px] uppercase tracking-wide text-muted2 font-extrabold border-b border-line">{t(h)}</th>
                 ))}
+                <th className="sticky top-0 end-0 z-20 bg-panel px-3 py-2 border-b border-s border-line" />
               </tr>
             </thead>
             <tbody>
-              {rows.map((r: AuditEntry) => (
+              {rows.map((r: AuditEntry) => {
+                const target = targetFor(r);
+                return (
                 <tr key={r.id} className="border-b border-line/50 align-top">
                   <td className="px-3 py-2 whitespace-nowrap text-muted2">{when(r.created_at)}</td>
                   <td className="px-3 py-2 whitespace-nowrap">{r.user_email ?? "—"}</td>
@@ -115,8 +154,20 @@ export default function History() {
                   <td className="px-3 py-2 whitespace-nowrap">{t(r.entity)}</td>
                   <td className="px-3 py-2 text-muted2">{r.entity_id ?? "—"}</td>
                   <td className="px-3 py-2"><Changes changes={r.changes} /></td>
+                  <td className="sticky end-0 z-10 bg-bg border-s border-line/50 px-3 py-2 text-end whitespace-nowrap">
+                    {target && (
+                      <Link
+                        to={target}
+                        className="inline-flex items-center gap-1 text-xs font-bold text-cyan hover:underline"
+                        title={t("Open")}
+                      >
+                        {t("Open")}<span className="rtl:rotate-180" aria-hidden>↗</span>
+                      </Link>
+                    )}
+                  </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </div>

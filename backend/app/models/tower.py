@@ -29,6 +29,13 @@ class Tower(Base):
     parent_name: Mapped[str | None] = mapped_column(String)
     parent_id: Mapped[int | None] = mapped_column(ForeignKey("towers.id", ondelete="SET NULL"))
     port: Mapped[str | None] = mapped_column(String)
+    # Service source — the four parts of a note like "328-bpwatani452-eth5-tag":
+    # switch model / source switch / port / tag mode. Used to trace outages
+    # upstream. (VLAN lives in the `vlan` field above — not duplicated here.)
+    feed_model: Mapped[str | None] = mapped_column(String)  # switch model, e.g. 328
+    fed_by: Mapped[str | None] = mapped_column(String)      # source switch, e.g. bpwatani452
+    feed_port: Mapped[str | None] = mapped_column(String)   # port on that switch, e.g. eth5
+    feed_mode: Mapped[str | None] = mapped_column(String)   # 'tag' | 'untag'
     status: Mapped[str] = mapped_column(String, default="Active", index=True)
     notes: Mapped[str | None] = mapped_column(String)
     zone_id: Mapped[int | None] = mapped_column(ForeignKey("zones.id", ondelete="SET NULL"), index=True)

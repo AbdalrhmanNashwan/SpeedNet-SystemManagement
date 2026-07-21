@@ -29,6 +29,7 @@ from app.core.config import settings
 from app.db.session import AsyncSessionLocal
 from app.models.device import Link, Switch, Sector
 from app.models.misc import IPAllocation, RoutingPoint, BackboneFeed
+from app.models.tower import Tower
 
 log = logging.getLogger("monitor")
 
@@ -99,7 +100,7 @@ class MonitorState:
 
     def __init__(self) -> None:
         self.results: dict[str, dict] = {}       # ip -> result dict
-        self.refs: dict[str, list[dict]] = {}    # ip -> [{label, tower_id, type, device_id}]
+        self.refs: dict[str, list[dict]] = {}    # ip -> [{label, tower_id, tower, type, device_id}]
         self.cycle = 0
         self.sweep_started_at: str | None = None
         self.sweep_completed_at: str | None = None
@@ -141,6 +142,15 @@ async def _collect_ips() -> dict[str, list[dict]]:
             refs.append(ref)
 
     async with AsyncSessionLocal() as db:
+        # tower_id -> name, so every ref can name the tower it belongs to
+        # (used by alerts and the map popup). One small query per refresh.
+        names: dict[int, str] = {}
+        try:
+            for tid, tname in (await db.execute(select(Tower.id, Tower.name))).all():
+                names[tid] = tname
+        except Exception as exc:
+            log.warning("monitor: failed reading tower names: %s", exc)
+
         # device rows — fully deep-linkable (tower_id + type + device_id)
         for Model, col, label, dtype in _DEVICE_SOURCES:
             try:
@@ -152,6 +162,7 @@ async def _collect_ips() -> dict[str, list[dict]]:
                 ip = _parse_ip(raw)
                 if ip:
                     add(ip, {"label": label, "tower_id": tower_id,
+                             "tower": names.get(tower_id),
                              "type": dtype, "device_id": row_id})
 
         # IP-allocation rows — deep-linkable to the IP Allocations page by id
@@ -165,6 +176,7 @@ async def _collect_ips() -> dict[str, list[dict]]:
                 ip = _parse_ip(raw)
                 if ip:
                     add(ip, {"label": label, "tower_id": tower_id,
+                             "tower": names.get(tower_id),
                              "type": "ip_allocation", "device_id": row_id})
 
         # other rows — no focusable UI row (label only)

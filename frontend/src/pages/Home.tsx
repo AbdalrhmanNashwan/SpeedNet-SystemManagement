@@ -5,6 +5,7 @@ import { useTowers } from "@/hooks/useTowers";
 import { usePerms } from "@/hooks/usePerms";
 import { ZoneDialog } from "@/components/ZoneDialog";
 import { DEVICE_SECTIONS } from "@/lib/deviceSections";
+import { Icon } from "@/components/Icon";
 import { emojiIcon } from "@/lib/emoji";
 import { useT } from "@/i18n";
 import type { Zone } from "@/types";
@@ -93,7 +94,7 @@ export default function Home() {
           to="/towers"
           className="card tilt p-5 flex flex-col gap-2 border-dashed border-line text-muted hover:border-blue hover:text-blue"
         >
-          <span className="text-3xl">🗼</span>
+          <Icon name="tower" className="w-8 h-8" />
           <div className="font-extrabold text-[15px]">{isAgent ? t("My Towers") : t("All Towers")}</div>
           <div className="text-[12px] mt-auto">
             {t("{n} total", { n: isAgent ? countByZone(user?.zone_id ?? -1) : towers?.length ?? 0 })}
@@ -108,14 +109,14 @@ export default function Home() {
         {DEVICE_SECTIONS.filter((s) => s.type !== "links").map((s) => (
           <Link key={s.type} to={`/devices/${s.type}`}
             className="card tilt halo p-5 flex flex-col gap-2 border border-line hover:border-cyan hover:text-cyan">
-            <span className="text-3xl">{s.icon}</span>
+            <Icon name={s.icon} className="w-8 h-8" />
             <div className="font-extrabold text-[15px]">{t(s.label)}</div>
           </Link>
         ))}
         {canSeeIpAllocations && (
           <Link to="/ip-allocations"
             className="card tilt p-5 flex flex-col gap-2 border border-line hover:border-cyan hover:text-cyan">
-            <span className="text-3xl">📡</span>
+            <Icon name="ip" className="w-8 h-8" />
             <div className="font-extrabold text-[15px]">{t("IP Allocations")}</div>
           </Link>
         )}

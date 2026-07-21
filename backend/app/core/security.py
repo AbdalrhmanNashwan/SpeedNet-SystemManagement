@@ -18,6 +18,21 @@ def verify_password(plain: str, hashed: str) -> bool:
     return pwd_context.verify(plain, hashed)
 
 
+# Pre-computed hash used to spend the same ~bcrypt work when the submitted email
+# doesn't exist, so login response timing can't be used to enumerate valid
+# accounts (a real user with a wrong password does one bcrypt verify; without
+# this, a missing user would return noticeably faster).
+_DUMMY_HASH = pwd_context.hash("speednet-nonexistent-account-timing-guard")
+
+
+def dummy_verify(plain: str) -> None:
+    """Verify against a throwaway hash purely to equalize timing; ignores result."""
+    try:
+        pwd_context.verify(plain, _DUMMY_HASH)
+    except Exception:
+        pass
+
+
 def _create_token(subject: str | int, role: str, expires: timedelta,
                   token_type: str, token_version: int) -> str:
     now = datetime.now(timezone.utc)

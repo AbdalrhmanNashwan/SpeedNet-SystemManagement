@@ -5,12 +5,15 @@ import { useDevices, useCreateDevice } from "@/hooks/useDevices";
 import { useZones } from "@/hooks/useZones";
 import { usePerms } from "@/hooks/usePerms";
 import { EditableField } from "@/components/EditableField";
+import { LocationPicker } from "@/components/LocationPicker";
 import { DeviceTable } from "@/components/DeviceTable";
 import { TransferDialog } from "@/components/TransferDialog";
 import { Breadcrumbs } from "@/components/Breadcrumbs";
+import { Icon } from "@/components/Icon";
 import { DEVICE_SECTIONS } from "@/lib/deviceSections";
 import {
   STATUS_OPTIONS, LINK_TYPE_OPTIONS, SWITCH_TYPE_OPTIONS,
+  FEED_MODE_OPTIONS, PORT_OPTIONS, FEED_MODEL_OPTIONS,
 } from "@/lib/fieldOptions";
 import { useT } from "@/i18n";
 import { emojiIcon } from "@/lib/emoji";
@@ -38,6 +41,15 @@ const META_FIELDS: { key: keyof Tower; label: string; mono?: boolean; options?: 
   { key: "notes", label: "Notes" },
 ];
 
+// Where the tower gets its service from — the four parts of a note like
+// "328-bpwatani452-eth5-tag" (used to trace outages upstream).
+const SERVICE_FIELDS: { key: keyof Tower; label: string; mono?: boolean; options?: string[] }[] = [
+  { key: "feed_model", label: "Switch model", mono: true, options: FEED_MODEL_OPTIONS },
+  { key: "fed_by", label: "Source switch", mono: true },
+  { key: "feed_port", label: "Port", mono: true, options: PORT_OPTIONS },
+  { key: "feed_mode", label: "Mode", options: FEED_MODE_OPTIONS },
+];
+
 function DeviceSection({
   towerId, section, canCreate, canUpdate, canDelete, highlightId,
 }: {
@@ -56,6 +68,7 @@ function DeviceSection({
   return (
     <section className="mb-8">
       <div className="flex items-center gap-3 mb-3">
+        <Icon name={section.icon} className="w-4 h-4 text-muted2" />
         <h2 className="text-xs font-extrabold uppercase tracking-widest text-muted2">{t(section.label)}</h2>
         <span className="text-xs text-muted2">({rows?.length ?? 0})</span>
         {canCreate && (
@@ -105,6 +118,7 @@ export default function TowerDetail() {
   const { data: zones } = useZones();
   const update = useUpdateTower();
   const deleteTower = useDeleteTower();
+  const [pickingLocation, setPickingLocation] = useState(false);
 
   if (isLoading) return <div className="p-10 text-muted">{t("Loading…")}</div>;
   if (!tower) return <div className="p-10 text-muted">{t("Tower not found.")}</div>;
@@ -163,7 +177,56 @@ export default function TowerDetail() {
             </div>
           ))}
         </div>
+        {canUpdate && (
+          <div className="mt-4 pt-4 border-t border-line">
+            <button
+              onClick={() => setPickingLocation(true)}
+              className="text-sm text-cyan hover:underline"
+            >
+              {t("📍 Pick location on map")}
+            </button>
+          </div>
+        )}
       </div>
+
+      {/* Service source — where this tower's feed comes from */}
+      <div className="card p-6 mb-8">
+        <div className="flex items-baseline justify-between gap-4 mb-1 flex-wrap">
+          <h2 className="text-xs font-extrabold uppercase tracking-widest text-muted2">{t("Service source")}</h2>
+          {(tower.feed_model || tower.fed_by || tower.feed_port || tower.feed_mode) && (
+            <span className="font-mono text-xs text-cyan">
+              {[tower.feed_model, tower.fed_by, tower.feed_port, tower.feed_mode].filter(Boolean).join("-")}
+            </span>
+          )}
+        </div>
+        <p className="text-[11px] text-muted2 mb-4">{t("Where this tower gets its service from — trace outages back to here.")}</p>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-8 gap-y-3">
+          {SERVICE_FIELDS.map(({ key, label, mono, options }) => (
+            <div key={key}>
+              <div className="text-[10px] text-muted2 uppercase tracking-wide font-bold mb-0.5">{t(label)}</div>
+              <EditableField
+                value={(tower as unknown as Record<string, string>)[key]}
+                mono={mono}
+                options={options}
+                canEdit={canUpdate}
+                onSave={(v) => { update.mutateAsync({ id: tower.id, patch: { [key]: v } }); }}
+              />
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {pickingLocation && (
+        <LocationPicker
+          lat={tower.gps_lat}
+          lng={tower.gps_lng}
+          onCancel={() => setPickingLocation(false)}
+          onSave={async (gps_lat, gps_lng) => {
+            await update.mutateAsync({ id: tower.id, patch: { gps_lat, gps_lng } });
+            setPickingLocation(false);
+          }}
+        />
+      )}
 
       {/* Device sections */}
       {DEVICE_SECTIONS.map((s) => (

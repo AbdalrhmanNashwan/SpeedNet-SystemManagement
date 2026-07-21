@@ -4,15 +4,9 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>SPEEDNeT Console</title>
-    <script>
-      // Apply saved theme before first paint to avoid a flash.
-      (function () {
-        try {
-          document.documentElement.setAttribute(
-            "data-theme", localStorage.getItem("theme") || "dark");
-        } catch (e) {}
-      })();
-    </script>
+    <!-- External (not inline) so the CSP can keep script-src 'self'. Runs
+         before first paint to avoid a flash of the wrong theme. -->
+    <script src="/theme-init.js"></script>
   </head>
   <body>
     <div id="root"></div>

@@ -14,6 +14,9 @@ export interface Tower {
   area?: string | null; gps_lat?: string | null; gps_lng?: string | null;
   height?: string | null; parent_name?: string | null; parent_id?: number | null;
   port?: string | null; status: string; notes?: string | null; zone_id?: number | null;
+  // service source — parts of a note like "328-bpwatani452-eth5-tag"
+  feed_model?: string | null; fed_by?: string | null;
+  feed_port?: string | null; feed_mode?: string | null;
 }
 
 export type DeviceType = "links" | "switches" | "sectors" | "servers";
@@ -59,6 +62,7 @@ export type PingStatus = "up" | "down" | "unknown";
 export interface MonitorRef {
   label: string;
   tower_id: number | null;
+  tower?: string | null;     // tower name, for alert/popup context
   type: string | null;       // device section: links | switches | sectors | null
   device_id: number | null;
 }

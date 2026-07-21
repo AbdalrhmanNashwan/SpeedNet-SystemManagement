@@ -34,6 +34,52 @@ def _now() -> datetime:
     return datetime.now(timezone.utc)
 
 
+def _tg_escape(s: str) -> str:
+    """Escape the characters Telegram's HTML parse mode treats as markup."""
+    return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+
+def _console_link(path: str) -> str | None:
+    """Build an absolute link into the console UI, or None if no base URL is
+    configured. `path` is an app route like "/tower/5" or "/monitor"; the
+    /console basename is added here so callers don't have to know about it."""
+    base = (settings.ALERT_LINK_BASE_URL or "").rstrip("/")
+    if not base:
+        return None
+    return f"{base}/console{path}"
+
+
+def _tower_names(refs: list[dict] | None) -> str:
+    """Distinct tower names an IP belongs to, in ref order, comma-joined. Empty
+    string when no ref carries a name (older refs, or IPs with no tower)."""
+    seen: list[str] = []
+    for ref in (refs or []):
+        name = ref.get("tower")
+        if name and name not in seen:
+            seen.append(name)
+    return ", ".join(seen)
+
+
+def _link_for(extra: dict) -> str | None:
+    """Pick the most useful deep link for an alert. Prefer the affected tower,
+    and when we know which device the IP belongs to, add ?focus=<type>:<id> so
+    the tower page scrolls to and highlights that exact row. Fall back to a
+    search for the IP, then the live monitor page for network-wide events."""
+    for ref in (extra.get("refs") or []):
+        tid = ref.get("tower_id")
+        if tid is not None:
+            dtype, did = ref.get("type"), ref.get("device_id")
+            if dtype and did is not None:
+                # matches TowerDetail's ?focus=<type>:<deviceId> deep-link,
+                # which highlights + scrolls the row into view.
+                return _console_link(f"/tower/{tid}?focus={dtype}:{did}")
+            return _console_link(f"/tower/{tid}")
+    ip = extra.get("ip")
+    if ip:
+        return _console_link(f"/search?q={ip}")
+    return _console_link("/monitor")
+
+
 class _IpState:
     __slots__ = ("down_streak", "up_streak", "confirmed_down", "last_down_alert", "seen_up")
 
@@ -134,12 +180,14 @@ class AlertManager:
     # -- emit / record ------------------------------------------------------
     async def _emit_ip(self, kind: str, ip: str, r: dict) -> None:
         sources = ", ".join(r.get("sources") or []) or "unknown"
+        towers = _tower_names(r.get("refs"))
+        at = f" at {towers}" if towers else ""   # name the tower when we know it
         if kind == "down":
             title = f"🔴 DOWN: {ip}"
-            body = f"{ip} is unreachable ({sources}). Down for ≥ {settings.ALERT_FAIL_THRESHOLD} checks."
+            body = f"{ip} is unreachable{at} ({sources}). Down for ≥ {settings.ALERT_FAIL_THRESHOLD} checks."
         else:
             title = f"🟢 RECOVERED: {ip}"
-            body = f"{ip} is reachable again ({sources})."
+            body = f"{ip} is reachable again{at} ({sources})."
         await self._dispatch(kind, title, body, {"ip": ip, "sources": r.get("sources"), "refs": r.get("refs")})
 
     async def _emit_mass(self, down: int, total: int) -> None:
@@ -154,13 +202,15 @@ class AlertManager:
         await self._dispatch("mass_outage", title, body, {"down": down, "total": total})
 
     async def _dispatch(self, kind: str, title: str, body: str, extra: dict) -> None:
+        link = _link_for(extra)
         event = {"kind": kind, "title": title, "body": body,
-                 "at": _now().isoformat(), **extra}
+                 "at": _now().isoformat(), "link": link, **extra}
         self.events.append(event)
         log.info("alert: %s", title)
         await asyncio.gather(
             self._send_webhook(event),
-            self._send_email(title, body),
+            self._send_email(title, body, link),
+            self._send_telegram(title, body, link),
             return_exceptions=True,
         )
 
@@ -175,22 +225,49 @@ class AlertManager:
         except Exception as exc:
             log.warning("alert webhook failed: %s", exc)
 
-    async def _send_email(self, subject: str, body: str) -> None:
+    async def _send_telegram(self, title: str, body: str, link: str | None = None) -> None:
+        s = settings
+        if not (s.ALERT_TELEGRAM_BOT_TOKEN and s.ALERT_TELEGRAM_CHAT_ID):
+            return
+        # HTML parse mode: bold title, plain body. Escape the few chars that are
+        # special to Telegram's HTML so device labels/IPs can't break the markup.
+        text = f"<b>{_tg_escape(title)}</b>\n{_tg_escape(body)}"
+        if link:
+            # Render as an <a> so it shows as "Open in console" rather than a
+            # raw URL. The href is escaped too — IPs/paths are safe but cheap.
+            text += f'\n<a href="{_tg_escape(link)}">Open in console →</a>'
+        url = f"{s.ALERT_TELEGRAM_API.rstrip('/')}/bot{s.ALERT_TELEGRAM_BOT_TOKEN}/sendMessage"
+        try:
+            async with httpx.AsyncClient(timeout=10) as c:
+                resp = await c.post(url, json={
+                    "chat_id": s.ALERT_TELEGRAM_CHAT_ID,
+                    "text": text,
+                    "parse_mode": "HTML",
+                    "disable_web_page_preview": True,
+                })
+                if resp.status_code != 200:
+                    # Telegram returns a JSON description on failure (bad token,
+                    # chat not started, etc.) — log it but never raise.
+                    log.warning("alert telegram failed: %s %s", resp.status_code, resp.text[:200])
+        except Exception as exc:
+            log.warning("alert telegram failed: %s", exc)
+
+    async def _send_email(self, subject: str, body: str, link: str | None = None) -> None:
         s = settings
         if not (s.ALERT_SMTP_HOST and s.ALERT_EMAIL_FROM and s.ALERT_EMAIL_TO):
             return
         try:
-            await asyncio.to_thread(self._smtp_send, subject, body)
+            await asyncio.to_thread(self._smtp_send, subject, body, link)
         except Exception as exc:
             log.warning("alert email failed: %s", exc)
 
-    def _smtp_send(self, subject: str, body: str) -> None:
+    def _smtp_send(self, subject: str, body: str, link: str | None = None) -> None:
         s = settings
         msg = EmailMessage()
         msg["Subject"] = f"[SPEEDNeT] {subject}"
         msg["From"] = s.ALERT_EMAIL_FROM
         msg["To"] = s.ALERT_EMAIL_TO
-        msg.set_content(body)
+        msg.set_content(f"{body}\n\n{link}" if link else body)
         with smtplib.SMTP(s.ALERT_SMTP_HOST, s.ALERT_SMTP_PORT, timeout=15) as smtp:
             if s.ALERT_SMTP_TLS:
                 smtp.starttls()

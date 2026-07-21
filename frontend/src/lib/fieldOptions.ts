@@ -27,6 +27,20 @@ export const RADIO_MODEL_OPTIONS = [
 
 export const SWITCH_MODEL_OPTIONS = SWITCH_TYPE_OPTIONS;
 
+// Service-source feed mode: how the VLAN rides the port (matches note format).
+export const FEED_MODE_OPTIONS = ["tag", "untag"];
+
+// Source switch model — reuses the curated full switch models (CRS328, RB4011, …).
+// EditableField still allows a custom value for anything outside this list.
+export const FEED_MODEL_OPTIONS = SWITCH_TYPE_OPTIONS;
+
+// Source port on the feeding switch. Covers a CRS328-24P-4S+ (24 ether + 4 sfp);
+// EditableField still allows a custom value for anything outside this list.
+export const PORT_OPTIONS = [
+  ...Array.from({ length: 24 }, (_, i) => `eth${i + 1}`),
+  "sfp1", "sfp2", "sfp3", "sfp4",
+];
+
 export const ZONE_COLOR_OPTIONS = [
   "cyan", "blue", "green", "yellow", "orange", "purple", "red",
 ];

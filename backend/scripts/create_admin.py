@@ -16,7 +16,17 @@ from app.models.user import User
 from app.core.security import hash_password
 
 
+_WEAK_PASSWORDS = {"changeme", "password", "admin", "admin123", "12345678"}
+
+
 async def main(email: str = "admin@speednet.local", password: str = "changeme"):
+    # Never create an admin with a weak/known password — this account is the
+    # keys to the whole console.
+    if len(password) < 8 or password.lower() in _WEAK_PASSWORDS:
+        print("Refusing to create an admin with a weak/default password. "
+              "Pass a strong one: python scripts/create_admin.py <email> <password>",
+              file=sys.stderr)
+        raise SystemExit(1)
     async with AsyncSessionLocal() as db:
         existing = (await db.execute(select(User).where(User.email == email))).scalar_one_or_none()
         if existing:

@@ -11,7 +11,7 @@ export interface DeviceCol {
 export interface DeviceSectionDef {
   type: DeviceType;
   label: string;
-  icon: string;
+  icon: string;   // name in the shared <Icon> set (see components/Icon.tsx)
   cols: DeviceCol[];
 }
 
@@ -21,14 +21,21 @@ export const DEVICE_SECTIONS: DeviceSectionDef[] = [
   {
     type: "links",
     label: "Links",
-    icon: "📡",
+    icon: "links",
     cols: [
       { key: "ssid", label: "SSID" },
       { key: "device_name", label: "Device" },
       { key: "device_type", label: "Type", options: RADIO_MODEL_OPTIONS },
-      { key: "wireless_pass", label: "Password", mono: true },
+      { key: "username", label: "Username", mono: true },
+      { key: "password", label: "Password", mono: true },
+      { key: "wireless_pass", label: "WiFi Pass", mono: true },
+      { key: "unlock_code", label: "Unlock Code", mono: true },
       { key: "ip", label: "IP", mono: true },
       { key: "gateway", label: "Gateway", mono: true },
+      { key: "subnet", label: "Subnet", mono: true },
+      { key: "vlan", label: "VLAN", mono: true },
+      { key: "port", label: "Port", mono: true },
+      { key: "serial_number", label: "Serial", mono: true },
       { key: "mac_address", label: "MAC", mono: true },
       { key: "target", label: "Target" },
     ],
@@ -36,12 +43,13 @@ export const DEVICE_SECTIONS: DeviceSectionDef[] = [
   {
     type: "switches",
     label: "Switches",
-    icon: "🔀",
+    icon: "switches",
     cols: [
       { key: "device_name", label: "Name" },
       { key: "model", label: "Model", options: SWITCH_MODEL_OPTIONS },
       { key: "ip", label: "IP", mono: true },
       { key: "gateway", label: "Gateway", mono: true },
+      { key: "subnet", label: "Subnet", mono: true },
       { key: "username", label: "Username", mono: true },
       { key: "password", label: "Password", mono: true },
       { key: "port", label: "Port", mono: true },
@@ -50,22 +58,25 @@ export const DEVICE_SECTIONS: DeviceSectionDef[] = [
   {
     type: "sectors",
     label: "Sectors (APs)",
-    icon: "📶",
+    icon: "sectors",
     cols: [
       { key: "ssid", label: "SSID" },
       { key: "device_name", label: "Device" },
       { key: "device_type", label: "Type", options: RADIO_MODEL_OPTIONS },
-      { key: "wireless_pass", label: "Password", mono: true },
-      { key: "ip", label: "IP", mono: true },
-      { key: "mac_address", label: "MAC", mono: true },
       { key: "username", label: "Username", mono: true },
       { key: "password", label: "Password", mono: true },
+      { key: "wireless_pass", label: "WiFi Pass", mono: true },
+      { key: "ip", label: "IP", mono: true },
+      { key: "gateway", label: "Gateway", mono: true },
+      { key: "subnet", label: "Subnet", mono: true },
+      { key: "serial_number", label: "Serial", mono: true },
+      { key: "mac_address", label: "MAC", mono: true },
     ],
   },
   {
     type: "servers",
     label: "Servers",
-    icon: "🖥️",
+    icon: "servers",
     cols: [
       { key: "device_name", label: "Name" },
       { key: "url", label: "URL", mono: true },

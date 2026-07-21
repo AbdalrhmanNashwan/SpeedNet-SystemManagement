@@ -155,7 +155,7 @@ export default function SiteLanding() {
                 { n: t("Local"), l: t("Support team") },
               ].map((s) => (
                 <div key={s.l} className="glass rounded-2xl px-3 py-5">
-                  <div className="text-2xl sm:text-3xl font-extrabold site-hero-text leading-none mb-1.5">{s.n}</div>
+                  <div className="text-2xl sm:text-3xl font-display font-extrabold site-hero-text leading-none mb-1.5">{s.n}</div>
                   <div className="text-[11px] uppercase tracking-widest text-muted2 font-bold">{s.l}</div>
                 </div>
               ))}
@@ -189,7 +189,7 @@ export default function SiteLanding() {
           </Reveal>
           <Reveal delay={150} className="text-center md:text-start md:order-1">
             <p className="text-cyan text-[11px] font-bold uppercase tracking-[0.3em] mb-3">{t("Coverage")}</p>
-            <div className="text-5xl sm:text-6xl font-extrabold site-hero-text leading-none mb-3">175+</div>
+            <div className="text-5xl sm:text-6xl font-display font-extrabold site-hero-text leading-none mb-3">175+</div>
             <h2 className="text-2xl sm:text-3xl font-extrabold mb-3">{t("Towers across Mosul & Nineveh")}</h2>
             <p className="text-muted text-base sm:text-lg max-w-md md:max-w-none mb-6">{t("Our own towers and sector antennas cover neighborhoods across the city and the plains — and we light up new areas as we grow. A few of the areas we serve:")}</p>
             <div className="flex flex-wrap justify-center md:justify-start gap-2.5">

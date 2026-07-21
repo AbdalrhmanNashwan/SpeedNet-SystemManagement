@@ -74,8 +74,10 @@ async def update_ip(ip_id: int, data: IPIn, db: AsyncSession = Depends(get_db),
     obj = await crud.get(db, ip_id)
     if not obj:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Not found")
-    obj = await crud.update(db, obj, data.model_dump(exclude_unset=True))
-    await audit.log(db, user, "update", "ip_allocation", ip_id, data.model_dump(exclude_unset=True))
+    changes = data.model_dump(exclude_unset=True)
+    delta = audit.diff(obj, changes)          # before/after — capture before mutating
+    obj = await crud.update(db, obj, changes)
+    await audit.log(db, user, "update", "ip_allocation", ip_id, delta)
     return obj
 
 

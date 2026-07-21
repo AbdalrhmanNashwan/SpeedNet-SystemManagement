@@ -66,8 +66,9 @@ async def update_zone(zone_id: int, data: ZoneUpdate, db: AsyncSession = Depends
     if not obj:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Zone not found")
     changes = data.model_dump(exclude_unset=True)
+    delta = audit.diff(obj, changes)          # before/after — capture before mutating
     obj = await crud.update(db, obj, changes)
-    await audit.log(db, user, "update", "zone", zone_id, changes)
+    await audit.log(db, user, "update", "zone", zone_id, delta)
     return obj
 
 

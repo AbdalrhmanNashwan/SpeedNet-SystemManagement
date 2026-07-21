@@ -1,10 +1,26 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useAlerts, type AlertEvent } from "@/hooks/useAlerts";
 import { useT } from "@/i18n";
 
 type TFn = (s: string, v?: Record<string, string | number>) => string;
 
 const SEEN_KEY = "speednet:alerts:lastSeen";
+
+/** Turn the backend's absolute link (…/console/tower/656) into a router path
+ *  (/tower/656) so clicking navigates as an in-app SPA transition instead of a
+ *  full page reload. Returns null when there's no usable link. */
+function toInternalPath(link?: string | null): string | null {
+  if (!link) return null;
+  try {
+    const u = new URL(link, window.location.origin);
+    let p = u.pathname;
+    if (p.startsWith("/console")) p = p.slice("/console".length) || "/";
+    return p + u.search;
+  } catch {
+    return null;
+  }
+}
 
 function tone(kind: AlertEvent["kind"]) {
   if (kind === "recovered") return { dot: "#34d399", text: "text-green" };
@@ -24,6 +40,7 @@ function ago(iso: string, t: TFn, skewMs = 0) {
 export function NotificationBell() {
   const { data } = useAlerts(true);
   const t = useT();
+  const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [lastSeen, setLastSeen] = useState<number>(() =>
     Number(localStorage.getItem(SEEN_KEY) || 0));
@@ -94,14 +111,32 @@ export function NotificationBell() {
             ) : (
               events.map((e, i) => {
                 const tn = tone(e.kind);
+                const target = toInternalPath(e.link);
+                const go = () => {
+                  if (!target) return;
+                  navigate(target);
+                  setOpen(false);
+                };
                 return (
-                  <div key={`${e.at}-${e.ip ?? i}`} className="flex gap-3 px-4 py-3 border-b border-line/40 last:border-0">
+                  <div
+                    key={`${e.at}-${e.ip ?? i}`}
+                    role={target ? "button" : undefined}
+                    tabIndex={target ? 0 : undefined}
+                    onClick={target ? go : undefined}
+                    onKeyDown={target ? (ev) => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); go(); } } : undefined}
+                    className={`flex gap-3 px-4 py-3 border-b border-line/40 last:border-0 ${target ? "cursor-pointer hover:bg-line/30 focus:bg-line/30 focus:outline-none" : ""}`}
+                  >
                     <span className="mt-1.5 w-2 h-2 rounded-full shrink-0" style={{ background: tn.dot }} />
-                    <div className="min-w-0">
+                    <div className="min-w-0 flex-1">
                       <p className={`text-sm font-semibold ${tn.text}`}>{e.title}</p>
                       <p className="text-xs text-muted leading-snug">{e.body}</p>
                       <p className="text-[11px] text-muted2 mt-0.5">{ago(e.at, t, skewMs)}</p>
                     </div>
+                    {target && (
+                      <svg viewBox="0 0 24 24" className="w-4 h-4 shrink-0 self-center text-muted2 rtl:rotate-180" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                        <path d="M9 18l6-6-6-6" />
+                      </svg>
+                    )}
                   </div>
                 );
               })

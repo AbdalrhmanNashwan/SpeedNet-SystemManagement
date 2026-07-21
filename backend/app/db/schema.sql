@@ -77,6 +77,13 @@ create table towers (
   parent_name   text,                           -- raw parent reference (topology)
   parent_id     bigint references towers(id) on delete set null,  -- resolved parent
   port          text,                           -- ether/sfp port on parent
+  -- Service source — the four parts of a note like "328-bpwatani452-eth5-tag":
+  -- model / source switch / port / tag mode. Used to trace outages upstream.
+  -- (VLAN is the `vlan` column above — not duplicated here.)
+  feed_model    text,                           -- switch model, e.g. 328
+  fed_by        text,                           -- source switch, e.g. bpwatani452
+  feed_port     text,                           -- port on that switch, e.g. eth5
+  feed_mode     text,                           -- 'tag' | 'untag'
   status        text default 'Active',          -- Active / Down / Cancelled / Future ...
   notes         text,
   created_at    timestamptz default now(),

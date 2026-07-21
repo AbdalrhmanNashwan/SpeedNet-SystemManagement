@@ -8,6 +8,10 @@ export type AlertEvent = {
   at: string;
   ip?: string;
   sources?: string[];
+  /** Absolute deep link into the console (e.g. .../console/tower/656) the
+   *  backend picks for this event — the affected tower, an IP search, or the
+   *  live monitor for network-wide events. May be null if no base URL is set. */
+  link?: string | null;
 };
 
 export type AlertFeed = {

@@ -86,8 +86,9 @@ async def update_tower(tower_id: int, data: TowerUpdate, db: AsyncSession = Depe
     # an agent must not move a tower out of their own zone
     if user.role == "agent" and "zone_id" in changes and changes["zone_id"] != user.zone_id:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Can't reassign a tower's zone")
+    delta = audit.diff(obj, changes)          # before/after — capture before mutating
     obj = await crud.update(db, obj, changes)
-    await audit.log(db, user, "update", "tower", obj.id, changes)
+    await audit.log(db, user, "update", "tower", obj.id, delta)
     return obj
 
 

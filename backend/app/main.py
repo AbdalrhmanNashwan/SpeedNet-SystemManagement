@@ -56,6 +56,45 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
     log.exception("Unhandled error on %s %s", request.method, request.url.path)
     return JSONResponse(status_code=500, content={"detail": "Internal server error"})
 
+# Content-Security-Policy for the served SPA. Kept tight but functional:
+#   * scripts/styles/fonts/images only from ourselves (plus the few third
+#     parties the app genuinely uses: Google Fonts, OpenStreetMap map tiles),
+#   * frame-ancestors 'none' blocks the login page (and everything else) from
+#     being framed → defeats clickjacking / UI-redress credential theft.
+# 'unsafe-inline' is allowed for style only (React sets inline style attrs);
+# scripts stay 'self' — the one inline bootstrap script now lives in
+# /theme-init.js so no 'unsafe-inline' is needed for script-src.
+_CSP = (
+    "default-src 'self'; "
+    "base-uri 'self'; "
+    "object-src 'none'; "
+    "frame-ancestors 'none'; "
+    "script-src 'self'; "
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+    "font-src 'self' https://fonts.gstatic.com; "
+    "img-src 'self' data: https://*.tile.openstreetmap.org; "
+    "connect-src 'self'"
+)
+
+
+@app.middleware("http")
+async def security_headers(request: Request, call_next):
+    resp = await call_next(request)
+    resp.headers.setdefault("X-Content-Type-Options", "nosniff")
+    resp.headers.setdefault("X-Frame-Options", "DENY")
+    resp.headers.setdefault("Referrer-Policy", "no-referrer")
+    # Only the map/location picker needs geolocation; deny the rest.
+    resp.headers.setdefault(
+        "Permissions-Policy", "geolocation=(self), camera=(), microphone=()")
+    resp.headers.setdefault("Content-Security-Policy", _CSP)
+    if settings.ENV == "production":
+        # HSTS is only meaningful over HTTPS; browsers ignore it on plain HTTP
+        # (LAN dev), so gating on ENV just avoids sending a useless header there.
+        resp.headers.setdefault(
+            "Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+    return resp
+
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.CORS_ORIGINS,

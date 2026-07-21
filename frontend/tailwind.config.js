@@ -12,9 +12,12 @@ export default {
         yellow: "var(--yellow)", orange: "var(--orange)", red: "var(--red)",
         purple: "var(--purple)",
       },
+      // Read the CSS custom properties in styles/tokens.css so utilities and
+      // raw CSS never drift. font-display = Space Grotesk headings.
       fontFamily: {
-        sans: ['"IBM Plex Sans"', '"IBM Plex Sans Arabic"', "Inter", "system-ui", "sans-serif"],
-        mono: ['"IBM Plex Mono"', "ui-monospace", "SFMono-Regular", "Menlo", "monospace"],
+        sans: ["var(--font-sans)"],
+        display: ["var(--font-display)"],
+        mono: ["var(--font-mono)"],
       },
       // calmer corners: everything converges on the 6–10px range
       borderRadius: {

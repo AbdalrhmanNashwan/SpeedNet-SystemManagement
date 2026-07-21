@@ -154,6 +154,7 @@ async def alerts(
             "mass_outage_min": settings.ALERT_MASS_OUTAGE_MIN,
             "webhook": bool(settings.ALERT_WEBHOOK_URL),
             "email": bool(settings.ALERT_SMTP_HOST and settings.ALERT_EMAIL_TO),
+            "telegram": bool(settings.ALERT_TELEGRAM_BOT_TOKEN and settings.ALERT_TELEGRAM_CHAT_ID),
         },
         "events": events,
     }

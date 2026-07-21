@@ -37,11 +37,29 @@ class Settings(BaseSettings):
             v = urlunsplit(parts._replace(query=urlencode(q)))
         return v
 
+    # Deployment environment. "production" turns on prod-only hardening such as
+    # HSTS; leave as "dev" locally. Set ENV=production in the production .env.
+    ENV: str = "dev"
+
     # Auth
     SECRET_KEY: str = "CHANGE_ME_run_openssl_rand_hex_32"
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     REFRESH_TOKEN_EXPIRE_DAYS: int = 14
+
+    @field_validator("SECRET_KEY", mode="after")
+    @classmethod
+    def _secret_key_must_be_strong(cls, v: str) -> str:
+        """Refuse to boot with the shipped placeholder or an obviously weak key.
+        Every JWT is signed with this — a known/guessable key lets anyone forge
+        an admin token and skip login entirely. Generate one with
+        `openssl rand -hex 32` and set SECRET_KEY in .env."""
+        if v.strip() in ("", "CHANGE_ME_run_openssl_rand_hex_32") or len(v.strip()) < 32:
+            raise ValueError(
+                "SECRET_KEY is missing, the placeholder, or too short (need >= 32 "
+                "chars). Generate one with `openssl rand -hex 32` and set it in .env."
+            )
+        return v
 
     # CORS — set to your frontend origin in production, e.g. https://net.speednet.iq
     CORS_ORIGINS: list[str] = ["http://localhost:5173"]
@@ -104,6 +122,22 @@ class Settings(BaseSettings):
     ALERT_SMTP_TLS: bool = True
     ALERT_EMAIL_FROM: str = ""
     ALERT_EMAIL_TO: str = ""        # comma-separated recipients
+
+    # Channel 3 — Telegram bot. Both must be set for Telegram alerts to send.
+    # Get the bot token from @BotFather; the chat id is the user/group the bot
+    # posts to (the bot must have received a /start from that chat first, or be
+    # a member of the target group). Empty = disabled.
+    ALERT_TELEGRAM_BOT_TOKEN: str = ""
+    ALERT_TELEGRAM_CHAT_ID: str = ""
+    # Telegram Bot API base — override only for a self-hosted API server.
+    ALERT_TELEGRAM_API: str = "https://api.telegram.org"
+
+    # Public base URL of the console, used to build clickable deep links in
+    # alerts (e.g. straight to the affected tower). No trailing slash and no
+    # /console suffix — that prefix is added automatically. Empty = no link.
+    # Set per-environment in .env (e.g. http://192.168.5.19:5173 on the LAN,
+    # or https://net.speednet.iq in production).
+    ALERT_LINK_BASE_URL: str = ""
 
     # ---- Automatic backups ----
     BACKUP_ENABLED: bool = True
