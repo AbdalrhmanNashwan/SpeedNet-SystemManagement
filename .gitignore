@@ -21,6 +21,10 @@ data/
 
 # Local backups (pg_dump output)
 backups/
+*.dump
+
+# DuckDNS token lives host-side only (C:\SpeedNet\secrets\duckdns.token)
+deploy/windows/duckdns.token
 
 # Local helper with real credentials
 HOW_TO_RUN.md

@@ -1,12 +1,12 @@
 # Caddy reverse proxy with automatic HTTPS via Let's Encrypt.
 #
-# Replace net.speednet.iq with your real domain and make sure the domain's
+# Replace speednetiq.duckdns.org with your real domain and make sure the domain's
 # A/AAAA record points at this host. Caddy obtains + renews the certificate
 # automatically on first request — no certbot, no cron.
 #
 # Run with deploy/docker-compose.prod.yml (service `caddy`).
 
-net.speednet.iq {
+speednetiq.duckdns.org {
 	encode gzip
 
 	# --- Security headers (defense in depth) ---

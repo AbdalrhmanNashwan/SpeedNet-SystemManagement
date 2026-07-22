@@ -18,14 +18,16 @@ services:
   backend:
     restart: always
     # Drop the host port publish from the base file; Caddy reaches it internally.
-    ports: []
+    # NOTE: compose CONCATENATES list fields across -f files — a plain `ports: []`
+    # would NOT cancel the base file's publish. `!override` forces replacement.
+    ports: !override []
     expose:
       - "8000"
 
   frontend:
     restart: always
     # No longer published directly; Caddy terminates TLS and proxies to it.
-    ports: []
+    ports: !override []
     expose:
       - "80"
 

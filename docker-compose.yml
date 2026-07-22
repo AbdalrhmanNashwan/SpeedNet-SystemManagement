@@ -1,13 +1,14 @@
 services:
   db:
-    image: postgres:16
+    image: postgres:18
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      # postgres:18 keeps its data under /var/lib/postgresql (not .../data)
+      - pgdata:/var/lib/postgresql
     # NOTE: no public port mapping — only the backend (same network) can reach it.
 
   backend:
@@ -19,6 +20,10 @@ services:
     # NET_RAW lets the IP monitor send ICMP (ping) packets without full root.
     cap_add:
       - NET_RAW
+    # persist the app's CSV/zip backups on the host disk (E:\deploy\backups on the
+    # production box) instead of the ephemeral container filesystem
+    volumes:
+      - /mnt/e/deploy/backups:/code/backups
     # expose only to nginx; do not publish publicly in production
     ports:
       - "127.0.0.1:8000:8000"
