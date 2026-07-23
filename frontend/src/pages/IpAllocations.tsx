@@ -5,8 +5,10 @@ import {
 } from "@/hooks/useIpAllocations";
 import { useIpStatusMap } from "@/hooks/useMonitor";
 import { EditableField } from "@/components/EditableField";
+import { SortableTh } from "@/components/SortableTh";
 import { StatusDot } from "@/components/StatusDot";
 import { Breadcrumbs } from "@/components/Breadcrumbs";
+import { useTableSort } from "@/hooks/useTableSort";
 import { normalizeIp } from "@/lib/ip";
 import { usePerms } from "@/hooks/usePerms";
 import { useT } from "@/i18n";
@@ -53,6 +55,7 @@ export default function IpAllocations() {
   const needle = q.trim().toLowerCase();
   const filtered = (rows ?? []).filter((a) =>
     !needle || COLS.some(({ key }) => String(a[key] ?? "").toLowerCase().includes(needle)));
+  const { sorted, sort, toggle: toggleSort } = useTableSort(filtered);
 
   return (
     <main className="max-w-[1400px] mx-auto px-4 sm:px-6 py-10">
@@ -83,13 +86,14 @@ export default function IpAllocations() {
             <thead>
               <tr>
                 {COLS.map((c) => (
-                  <th key={String(c.key)} className="sticky top-0 z-10 bg-panel text-start px-3 py-2 text-[9.5px] uppercase tracking-wide text-muted2 font-extrabold border-b border-line">{t(c.label)}</th>
+                  <SortableTh key={String(c.key)} label={t(c.label)} sortKey={String(c.key)}
+                    sort={sort} onSort={toggleSort} />
                 ))}
                 {canDelete && <th className="sticky top-0 z-10 bg-panel border-b border-line" />}
               </tr>
             </thead>
             <tbody>
-              {filtered.map((a) => {
+              {sorted.map((a) => {
                 const hl = a.id === focusId;
                 return (
                   <tr key={a.id}

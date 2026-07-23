@@ -1,11 +1,22 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import api from "@/lib/api";
+import { SortableTh } from "@/components/SortableTh";
+import { useTableSort } from "@/hooks/useTableSort";
 import { useZones } from "@/hooks/useZones";
 import { useT } from "@/i18n";
 import type { User, Role } from "@/types";
 
 const ROLES: Role[] = ["admin", "editor", "viewer", "agent"];
+
+// Sorting by role should group by privilege, not alphabetically.
+const ROLE_ORDER: Record<Role, number> = { admin: 0, editor: 1, agent: 2, viewer: 3 };
+
+// This table is roomier than the dense data tables, so it keeps its own header
+// styling rather than SortableTh's default.
+const USERS_TH =
+  "text-start px-4 py-3 text-[10px] text-muted2 uppercase tracking-wide " +
+  "font-extrabold border-b border-line bg-panel2";
 
 // The protected owner account — the backend forbids changing its role, active
 // state, or deleting it. Mirror that here so the controls are locked in the UI.
@@ -183,6 +194,20 @@ export default function Users() {
 
   const zoneName = (id: number | null) => zones?.find((z) => z.id === id)?.name ?? "—";
 
+  // Sorts by what each column *displays* — the zone's name, not its id, and
+  // role by privilege rather than alphabetically.
+  const accessors = useMemo(() => ({
+    email: (u: User) => u.email,
+    full_name: (u: User) => u.full_name,
+    role: (u: User) => ROLE_ORDER[u.role],
+    zone: (u: User) => zones?.find((z) => z.id === u.zone_id)?.name ?? null,
+    permissions: (u: User) =>
+      Number(u.can_create) + Number(u.can_update) + Number(u.can_delete),
+    is_active: (u: User) => u.is_active,
+  }), [zones]);
+
+  const { sorted, sort, toggle: toggleSort } = useTableSort(users ?? [], { accessors });
+
   return (
     <main className="max-w-5xl mx-auto px-4 sm:px-6 py-10">
       <div className="flex items-center mb-8">
@@ -200,15 +225,18 @@ export default function Users() {
           <table className="w-full text-sm border-collapse min-w-[880px]">
             <thead>
               <tr>
-                {["Email", "Name", "Role", "Zone", "Permissions", "Active", ""].map((h) => (
-                  <th key={h} className="text-start px-4 py-3 text-[10px] text-muted2 uppercase tracking-wide font-extrabold border-b border-line bg-panel2">
-                    {h && t(h)}
-                  </th>
+                {([
+                  ["Email", "email"], ["Name", "full_name"], ["Role", "role"],
+                  ["Zone", "zone"], ["Permissions", "permissions"],
+                  ["Active", "is_active"], ["", undefined],
+                ] as [string, string | undefined][]).map(([label, key]) => (
+                  <SortableTh key={label || "actions"} label={label && t(label)}
+                    sortKey={key} sort={sort} onSort={toggleSort} thClass={USERS_TH} />
                 ))}
               </tr>
             </thead>
             <tbody>
-              {users?.map((u) => {
+              {sorted.map((u) => {
                 const owner = isOwner(u.email);
                 return (
                 <tr key={u.id} className="border-b border-line/50 hover:bg-panel2/50">

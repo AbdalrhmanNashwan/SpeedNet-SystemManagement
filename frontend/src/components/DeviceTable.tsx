@@ -1,7 +1,9 @@
 import { useRef, useState } from "react";
 import type { Device, DeviceType } from "@/types";
 import { EditableField } from "./EditableField";
+import { SortableTh } from "./SortableTh";
 import { StatusDot } from "./StatusDot";
+import { useTableSort } from "@/hooks/useTableSort";
 import { useUpdateDevice, useDeleteDevice } from "@/hooks/useDevices";
 import { useIpStatusMap } from "@/hooks/useMonitor";
 import { normalizeIp } from "@/lib/ip";
@@ -33,6 +35,9 @@ export function DeviceTable({
   const ipStatus = useIpStatusMap();
   const scrolledFor = useRef<number | undefined>(undefined);  // scroll to highlight only once
   const [selected, setSelected] = useState<Set<number>>(new Set());
+  // Sorting is display-only: `rows` stays the source of truth for select-all
+  // and bulk actions, so re-sorting never changes what's selected.
+  const { sorted, sort, toggle: toggleSort } = useTableSort(rows);
 
   const toggle = (id: number) =>
     setSelected((s) => {
@@ -73,15 +78,14 @@ export function DeviceTable({
                 </th>
               )}
               {cols.map((c) => (
-                <th key={String(c.key)} className="sticky top-0 z-10 bg-panel text-start px-3 py-2 text-[9.5px] uppercase tracking-wide text-muted2 font-extrabold border-b border-line">
-                  {t(c.label)}
-                </th>
+                <SortableTh key={String(c.key)} label={t(c.label)} sortKey={String(c.key)}
+                  sort={sort} onSort={toggleSort} />
               ))}
               {canAct && <th className="sticky top-0 end-0 z-20 bg-panel border-b border-s border-line" />}
             </tr>
           </thead>
           <tbody>
-            {rows.map((r) => {
+            {sorted.map((r) => {
               const dim = r.flags?.some((f) => f === "no-access" || f === "virtual");
               const sel = selected.has(r.id);
               const hl = r.id === highlightId;

@@ -1,8 +1,10 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useMonitor } from "@/hooks/useMonitor";
+import { SortableTh } from "@/components/SortableTh";
 import { StatusDot } from "@/components/StatusDot";
 import { Breadcrumbs } from "@/components/Breadcrumbs";
+import { useTableSort } from "@/hooks/useTableSort";
 import { useT } from "@/i18n";
 import type { MonitorRef, MonitorResult, PingStatus } from "@/types";
 
@@ -19,7 +21,22 @@ function towerLink(refs: MonitorRef[]): string | null {
 }
 
 type Filter = "all" | "up" | "down" | "unknown";
-type Sort = "problems" | "recent_down" | "longest_down" | "ip" | "latency";
+
+// down first, then unknown, then up — "sort by status" means surface problems.
+const STATUS_RANK: Record<PingStatus, number> = { down: 0, unknown: 1, up: 2 };
+
+// Module-level so the identity is stable across renders (see useTableSort).
+const ACCESSORS = {
+  status: (r: MonitorResult) => STATUS_RANK[r.status],
+  ip: (r: MonitorResult) => r.ip,
+  // Blank for online hosts, so compareCells parks them after the outages in
+  // both directions: desc = most recently went offline, asc = down the longest.
+  down_since: (r: MonitorResult) => r.down_since,
+  latency_ms: (r: MonitorResult) => r.latency_ms,
+  packet_loss: (r: MonitorResult) => (r.status === "up" ? r.packet_loss : null),
+  sources: (r: MonitorResult) => r.sources.join(", "),
+  last_checked: (r: MonitorResult) => r.last_checked,
+};
 
 /** How long an IP has been continuously offline, as a compact label. */
 function downFor(iso: string | null, t: (s: string, v?: Record<string, string | number>) => string): string {
@@ -53,48 +70,22 @@ export default function Monitor() {
   const { data, isLoading, error } = useMonitor();
   const t = useT();
   const [filter, setFilter] = useState<Filter>("all");
-  const [sort, setSort] = useState<Sort>("problems");
   const [q, setQ] = useState("");
 
-  const rows = useMemo(() => {
+  const filtered = useMemo(() => {
     let r = data?.results ?? [];
     if (filter !== "all") r = r.filter((x) => x.status === filter);
     const needle = q.trim().toLowerCase();
     if (needle) r = r.filter((x) =>
       x.ip.includes(needle) || x.sources.some((s) => s.toLowerCase().includes(needle)));
+    return r;
+  }, [data, filter, q]);
 
-    // down first, then unknown, then up — surface problems
-    const rank: Record<PingStatus, number> = { down: 0, unknown: 1, up: 2 };
-    const byIp = (a: MonitorResult, b: MonitorResult) => a.ip.localeCompare(b.ip);
-    // Still-up IPs have no down_since; they always sort after the offline ones
-    // regardless of direction, so the outage list stays at the top.
-    const since = (x: MonitorResult) => (x.down_since ? new Date(x.down_since).getTime() : null);
-    const byDown = (a: MonitorResult, b: MonitorResult, newestFirst: boolean) => {
-      const [sa, sb] = [since(a), since(b)];
-      if (sa == null && sb == null) return rank[a.status] - rank[b.status] || byIp(a, b);
-      if (sa == null) return 1;
-      if (sb == null) return -1;
-      return (newestFirst ? sb - sa : sa - sb) || byIp(a, b);
-    };
-
-    const cmp: Record<Sort, (a: MonitorResult, b: MonitorResult) => number> = {
-      problems: (a, b) => rank[a.status] - rank[b.status] || byIp(a, b),
-      recent_down: (a, b) => byDown(a, b, true),
-      longest_down: (a, b) => byDown(a, b, false),
-      ip: byIp,
-      // unreachable hosts have no latency — park them at the end
-      latency: (a, b) => (a.latency_ms ?? Infinity) - (b.latency_ms ?? Infinity) || byIp(a, b),
-    };
-    return [...r].sort(cmp[sort]);
-  }, [data, filter, q, sort]);
-
-  const sorts: { key: Sort; label: string }[] = [
-    { key: "problems", label: t("Problems first") },
-    { key: "recent_down", label: t("Recently went offline") },
-    { key: "longest_down", label: t("Offline the longest") },
-    { key: "ip", label: t("IP address") },
-    { key: "latency", label: t("Latency") },
-  ];
+  // Defaults to problems-first; click "Down for" to rank by outage recency.
+  const { sorted: rows, sort, toggle: toggleSort } = useTableSort(filtered, {
+    initial: { key: "status", dir: "asc" },
+    accessors: ACCESSORS,
+  });
 
   const tabs: { key: Filter; label: string; cls?: string }[] = [
     { key: "all", label: t("All {n}", { n: data?.total ?? 0 }) },
@@ -140,15 +131,8 @@ export default function Monitor() {
             {t.label}
           </button>
         ))}
-        <select value={sort} onChange={(e) => setSort(e.target.value as Sort)}
-          aria-label={t("Sort by")}
-          className="sm:ms-auto bg-bg2 border border-line rounded-lg px-2 py-1.5 text-xs font-bold text-muted outline-none focus:border-blue">
-          {sorts.map((s) => (
-            <option key={s.key} value={s.key}>{t("Sort: {label}", { label: s.label })}</option>
-          ))}
-        </select>
         <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("Filter by IP or source…")}
-          className="bg-bg2 border border-line rounded-lg px-3 py-1.5 text-sm outline-none focus:border-blue w-full sm:w-56" />
+          className="sm:ms-auto bg-bg2 border border-line rounded-lg px-3 py-1.5 text-sm outline-none focus:border-blue w-full sm:w-56" />
       </div>
 
       {isLoading ? (
@@ -162,8 +146,13 @@ export default function Monitor() {
           <table className="w-full border-collapse text-[12.5px]">
             <thead>
               <tr>
-                {["Status", "IP", "Down for", "Latency", "Loss", "Source", "Checked"].map((h) => (
-                  <th key={h} className="sticky top-0 z-10 bg-panel text-start px-3 py-2 text-[9.5px] uppercase tracking-wide text-muted2 font-extrabold border-b border-line">{t(h)}</th>
+                {([
+                  ["Status", "status"], ["IP", "ip"], ["Down for", "down_since"],
+                  ["Latency", "latency_ms"], ["Loss", "packet_loss"],
+                  ["Source", "sources"], ["Checked", "last_checked"],
+                ] as const).map(([label, key]) => (
+                  <SortableTh key={key} label={t(label)} sortKey={key}
+                    sort={sort} onSort={toggleSort} />
                 ))}
               </tr>
             </thead>

@@ -2,10 +2,25 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useAudit } from "@/hooks/useAudit";
 import { Breadcrumbs } from "@/components/Breadcrumbs";
+import { SortableTh } from "@/components/SortableTh";
+import { useTableSort } from "@/hooks/useTableSort";
 import { useT } from "@/i18n";
 import type { AuditEntry } from "@/types";
 
 const PAGE = 100;
+
+// Column label → sort key. "Details" is a rendered diff, not a value, so it
+// stays unsortable. Sorting applies to the current page only — the server
+// paginates newest-first, so this reorders what you're looking at, not the
+// whole audit log.
+const COLUMNS: [label: string, key?: string][] = [
+  ["When", "created_at"],
+  ["User", "user_email"],
+  ["Action", "action"],
+  ["Type", "entity"],
+  ["ID", "entity_id"],
+  ["Details"],
+];
 
 // Device entities live on their tower's page and are deep-linked with
 // ?focus=<type>:<id> (TowerDetail highlights + scrolls to the row).
@@ -84,6 +99,8 @@ export default function History() {
   const filters = { entity, action, q, limit: PAGE, offset: page * PAGE };
   const { data, isLoading, isFetching } = useAudit(filters);
   const rows = data ?? [];
+  // Sorts the current page; `rows.length` still drives paging off the raw page.
+  const { sorted, sort, toggle: toggleSort } = useTableSort(rows);
 
   const reset = (fn: () => void) => { fn(); setPage(0); };
 
@@ -133,14 +150,15 @@ export default function History() {
           <table className="w-full border-collapse text-[12.5px]">
             <thead>
               <tr>
-                {["When", "User", "Action", "Type", "ID", "Details"].map((h) => (
-                  <th key={h} className="sticky top-0 z-10 bg-panel text-start px-3 py-2 text-[9.5px] uppercase tracking-wide text-muted2 font-extrabold border-b border-line">{t(h)}</th>
+                {COLUMNS.map(([label, key]) => (
+                  <SortableTh key={label} label={t(label)} sortKey={key}
+                    sort={sort} onSort={toggleSort} />
                 ))}
                 <th className="sticky top-0 end-0 z-20 bg-panel px-3 py-2 border-b border-s border-line" />
               </tr>
             </thead>
             <tbody>
-              {rows.map((r: AuditEntry) => {
+              {sorted.map((r: AuditEntry) => {
                 const target = targetFor(r);
                 return (
                 <tr key={r.id} className="border-b border-line/50 align-top">
