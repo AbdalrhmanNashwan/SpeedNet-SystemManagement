@@ -43,8 +43,11 @@ notify() {
   tok=$(grep -oP '(?<=^ALERT_TELEGRAM_BOT_TOKEN=).*' .env 2>/dev/null | tr -d '\r' || true)
   chat=$(grep -oP '(?<=^ALERT_TELEGRAM_CHAT_ID=).*' .env 2>/dev/null | tr -d '\r' || true)
   [ -n "${tok:-}" ] && [ -n "${chat:-}" ] || return 0
+  # HTML mode to match the app's alerts, so deploy messages don't look like a
+  # different system shouting into the same group.
   curl -sS --max-time 10 -o /dev/null \
-    -d "chat_id=$chat" --data-urlencode "text=$1" \
+    -d "chat_id=$chat" -d "parse_mode=HTML" -d "disable_web_page_preview=true" \
+    --data-urlencode "text=$1" \
     "https://api.telegram.org/bot${tok}/sendMessage" >>"$LOG" 2>&1 || true
 }
 
@@ -83,15 +86,15 @@ rollback() {
   git reset --hard "$PREV" >>"$LOG" 2>&1 || true
   if compose up -d --build >>"$LOG" 2>&1 && healthy; then
     log "rolled back to $(git rev-parse --short HEAD) — site is up"
-    notify "🚨 SPEEDNeT deploy FAILED ($why)
-Commit $(git rev-parse --short "$REMOTE") is NOT live.
-Rolled back to $(git rev-parse --short HEAD) — site is UP.
-Auto-deploy is paused until a new commit lands."
+    notify "🚨 <b>Deploy failed</b>
+<code>$(git rev-parse --short "$REMOTE")</code> is not live — $why
+Rolled back to <code>$(git rev-parse --short HEAD)</code>
+Site is up · paused until the next commit"
   else
     log "ROLLBACK ALSO FAILED — manual intervention needed"
-    notify "🔥 SPEEDNeT deploy FAILED ($why) and the ROLLBACK ALSO FAILED.
-The site may be DOWN. Manual fix needed on the server.
-Log: $LOG"
+    notify "🔥 <b>Deploy failed AND rollback failed</b>
+$why
+The site may be DOWN — manual fix needed on the server."
   fi
   exit 1
 }
@@ -108,5 +111,6 @@ log "deploy complete at $(git rev-parse --short HEAD)"
 # Recovering from a previously failed deploy is worth saying out loud.
 if [ -f "$FAILED_MARK" ]; then
   rm -f "$FAILED_MARK"
-  notify "✅ SPEEDNeT deploy recovered — now live at $(git rev-parse --short HEAD)."
+  notify "✅ <b>Deploy recovered</b>
+Now live at <code>$(git rev-parse --short HEAD)</code>"
 fi

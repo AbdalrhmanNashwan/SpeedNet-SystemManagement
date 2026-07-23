@@ -80,14 +80,65 @@ def _link_for(extra: dict) -> str | None:
     return _console_link("/monitor")
 
 
+def _tg_body(title: str, body: str, link: str | None, event: dict | None) -> str:
+    """Lay an alert out for Telegram: one fact per line, phone-readable.
+
+    The old format repeated the IP in both the heading and the sentence and
+    ended with "Down for >= 3 checks", which is internal jargon. This puts the
+    status on top, the IP on its own line as monospace (so it's tappable to
+    copy), and the tower/device underneath.
+    """
+    ev = event or {}
+    kind = ev.get("kind")
+    ip = ev.get("ip")
+
+    lines: list[str] = []
+    if kind in ("down", "recovered") and ip:
+        # "🔴 DOWN: 10.0.0.1" -> heading without the IP, which goes below.
+        head = title.split(":", 1)[0].strip()
+        lines.append(f"<b>{_tg_escape(head)}</b>")
+        lines.append(f"<code>{_tg_escape(ip)}</code>")
+        where = " · ".join(_tg_escape(p) for p in (ev.get("tower"), ev.get("device")) if p)
+        if where:
+            lines.append(where)
+        if ev.get("down_for"):
+            lines.append(f"<i>was down {_tg_escape(ev['down_for'])}</i>")
+    else:
+        lines.append(f"<b>{_tg_escape(title)}</b>")
+        if body:
+            lines.append(_tg_escape(body))
+
+    if link:
+        lines.append(f'<a href="{_tg_escape(link)}">Open in console →</a>')
+    return "\n".join(lines)
+
+
+def _human_duration(seconds: float) -> str:
+    """Short human duration: 45s / 12m / 3h 20m / 2d 4h."""
+    s = int(max(0, seconds))
+    if s < 60:
+        return f"{s}s"
+    if s < 3600:
+        return f"{s // 60}m"
+    if s < 86400:
+        h, m = divmod(s // 60, 60)
+        return f"{h}h {m}m" if m else f"{h}h"
+    d, h = divmod(s // 3600, 24)
+    return f"{d}d {h}h" if h else f"{d}d"
+
+
 class _IpState:
-    __slots__ = ("down_streak", "up_streak", "confirmed_down", "last_down_alert", "seen_up")
+    __slots__ = ("down_streak", "up_streak", "confirmed_down", "last_down_alert",
+                 "seen_up", "down_at")
 
     def __init__(self) -> None:
         self.down_streak = 0
         self.up_streak = 0
         self.confirmed_down = False          # last *notified* state for this IP
         self.last_down_alert: datetime | None = None
+        # When we confirmed this IP down, so recovery can report how long it
+        # was out — the single most useful thing in a recovery message.
+        self.down_at: datetime | None = None
         # Only alert on a real online->offline transition. An IP that has been
         # offline the whole time (e.g. already down at startup) is a silent
         # baseline until we've actually seen it up once.
@@ -123,16 +174,16 @@ class AlertManager:
         Deliberately ignores ALERT_ENABLED: you need to be able to test the
         channels *before* turning alerting on.
         """
-        title = "🔔 TEST alert"
-        body = (f"Test alert requested by {by}. If you can read this, this channel "
-                f"is configured correctly — no device is actually down.")
+        title = "🔔 Test alert"
+        body = (f"This channel is working — nothing is actually down. "
+                f"Sent by {by}.")
         link = _console_link("/monitor")
         event = {"kind": "test", "title": title, "body": body,
                  "at": _now().isoformat(), "link": link}
         self.events.append(event)
         self._last_tg_error = None
         await asyncio.gather(
-            self._send_telegram(title, body, link),
+            self._send_telegram(title, body, link, event),
             self._send_email(title, body, link),
             self._send_webhook(event),
             return_exceptions=True,
@@ -200,6 +251,7 @@ class AlertManager:
                     if st.seen_up and self._cooldown_ok(st):
                         st.confirmed_down = True
                         st.last_down_alert = _now()
+                        st.down_at = _now()
                         await self._emit_ip("down", ip, r)
             else:  # up
                 st.up_streak += 1
@@ -207,7 +259,9 @@ class AlertManager:
                 st.seen_up = True
                 if st.confirmed_down and st.up_streak >= settings.ALERT_RECOVER_THRESHOLD:
                     st.confirmed_down = False
-                    await self._emit_ip("recovered", ip, r)
+                    down_for = (_now() - st.down_at).total_seconds() if st.down_at else None
+                    st.down_at = None
+                    await self._emit_ip("recovered", ip, r, down_for)
 
     def _cooldown_ok(self, st: _IpState) -> bool:
         if st.last_down_alert is None:
@@ -216,27 +270,37 @@ class AlertManager:
         return mins >= settings.ALERT_COOLDOWN_MINUTES
 
     # -- emit / record ------------------------------------------------------
-    async def _emit_ip(self, kind: str, ip: str, r: dict) -> None:
-        sources = ", ".join(r.get("sources") or []) or "unknown"
+    async def _emit_ip(self, kind: str, ip: str, r: dict,
+                       down_for: float | None = None) -> None:
+        sources = ", ".join(r.get("sources") or [])
         towers = _tower_names(r.get("refs"))
-        at = f" at {towers}" if towers else ""   # name the tower when we know it
+        # "برج الطيران · P2P link" — the two things you need to know after the
+        # IP itself, with whichever we actually have.
+        where = " · ".join(x for x in (towers, sources) if x)
         if kind == "down":
             title = f"🔴 DOWN: {ip}"
-            body = f"{ip} is unreachable{at} ({sources}). Down for ≥ {settings.ALERT_FAIL_THRESHOLD} checks."
+            body = where or "no tower/device reference"
         else:
-            title = f"🟢 RECOVERED: {ip}"
-            body = f"{ip} is reachable again{at} ({sources})."
-        await self._dispatch(kind, title, body, {"ip": ip, "sources": r.get("sources"), "refs": r.get("refs")})
+            title = f"🟢 BACK UP: {ip}"
+            body = where or "no tower/device reference"
+            if down_for is not None:
+                body += f" — was down {_human_duration(down_for)}"
+        await self._dispatch(kind, title, body, {
+            "ip": ip, "sources": r.get("sources"), "refs": r.get("refs"),
+            # structured, so each channel can lay it out its own way instead of
+            # re-parsing a sentence
+            "tower": towers or None, "device": sources or None,
+            "down_for": _human_duration(down_for) if down_for is not None else None,
+        })
 
     async def _emit_mass(self, down: int, total: int) -> None:
         # cooldown the aggregate too, so a sustained outage doesn't repeat
         if self._last_mass_alert and (_now() - self._last_mass_alert).total_seconds() / 60.0 < settings.ALERT_COOLDOWN_MINUTES:
             return
         self._last_mass_alert = _now()
-        title = f"⚠️ MASS OUTAGE: {down}/{total} IPs down"
-        body = (f"{down} of {total} monitored IPs went down at once — likely an "
-                f"upstream / monitoring-side issue rather than {down} separate faults. "
-                f"Per-IP alerts are suppressed until it clears.")
+        title = f"⚠️ MASS OUTAGE: {down} of {total} IPs down"
+        body = ("Likely one upstream or monitoring-side fault, not "
+                f"{down} separate ones. Per-IP alerts paused until it clears.")
         await self._dispatch("mass_outage", title, body, {"down": down, "total": total})
 
     async def _dispatch(self, kind: str, title: str, body: str, extra: dict) -> None:
@@ -248,7 +312,7 @@ class AlertManager:
         await asyncio.gather(
             self._send_webhook(event),
             self._send_email(title, body, link),
-            self._send_telegram(title, body, link),
+            self._send_telegram(title, body, link, event),
             return_exceptions=True,
         )
 
@@ -263,18 +327,13 @@ class AlertManager:
         except Exception as exc:
             log.warning("alert webhook failed: %s", exc)
 
-    async def _send_telegram(self, title: str, body: str, link: str | None = None) -> None:
+    async def _send_telegram(self, title: str, body: str, link: str | None = None,
+                             event: dict | None = None) -> None:
         s = settings
         if not (s.ALERT_TELEGRAM_BOT_TOKEN and s.ALERT_TELEGRAM_CHAT_ID):
             self._last_tg_error = "not configured (bot token / chat id missing)"
             return
-        # HTML parse mode: bold title, plain body. Escape the few chars that are
-        # special to Telegram's HTML so device labels/IPs can't break the markup.
-        text = f"<b>{_tg_escape(title)}</b>\n{_tg_escape(body)}"
-        if link:
-            # Render as an <a> so it shows as "Open in console" rather than a
-            # raw URL. The href is escaped too — IPs/paths are safe but cheap.
-            text += f'\n<a href="{_tg_escape(link)}">Open in console →</a>'
+        text = _tg_body(title, body, link, event)
         url = f"{s.ALERT_TELEGRAM_API.rstrip('/')}/bot{s.ALERT_TELEGRAM_BOT_TOKEN}/sendMessage"
         try:
             async with httpx.AsyncClient(timeout=10) as c:

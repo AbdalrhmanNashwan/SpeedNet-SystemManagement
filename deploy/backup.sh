@@ -42,15 +42,17 @@ notify() {
   chat=$(envval ALERT_TELEGRAM_CHAT_ID)
   [ -n "${tok:-}" ] && [ -n "${chat:-}" ] || return 0
   curl -sS --max-time 10 -o /dev/null \
-    -d "chat_id=$chat" --data-urlencode "text=$1" \
+    -d "chat_id=$chat" -d "parse_mode=HTML" -d "disable_web_page_preview=true" \
+    --data-urlencode "text=$1" \
     "https://api.telegram.org/bot${tok}/sendMessage" || true
 }
 
 fail() {
   rm -f "$TMP"
   log "BACKUP FAILED: $1"
-  notify "🚨 SPEEDNeT database backup FAILED: $1
-No new dump was written to $BACKUP_DIR."
+  notify "🚨 <b>Database backup failed</b>
+$1
+No new dump written to <code>$BACKUP_DIR</code>"
   exit 1
 }
 
