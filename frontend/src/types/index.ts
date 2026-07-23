@@ -73,6 +73,10 @@ export interface MonitorResult {
   latency_ms: number | null;
   packet_loss: number;
   last_checked: string;
+  /** When the current outage started (null while up). Unlike last_checked —
+   *  which is the same for every IP in a sweep — this is what "recently went
+   *  offline" sorts on. */
+  down_since: string | null;
   sources: string[];
   refs: MonitorRef[];
 }

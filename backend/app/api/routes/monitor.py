@@ -7,7 +7,7 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.deps import get_current_user, get_db
+from app.core.deps import get_current_user, get_db, require_role
 from app.core.config import settings
 from app.core.limiter import limiter
 from app.models.user import User
@@ -160,6 +160,20 @@ async def alerts(
     }
 
 
+@router.post("/alerts/test")
+@limiter.limit("6/minute")
+async def alerts_test(request: Request,
+                      user: User = Depends(require_role("admin"))):
+    """Send a test alert through every configured channel (admin only).
+
+    Reports which channels are configured and, for Telegram, the last error —
+    so a wrong bot token or a chat that never messaged the bot is visible here
+    instead of looking like "the network is fine".
+    """
+    from app.services.alerts import manager
+    return await manager.send_test(user.email)
+
+
 # ---------------------------------------------------------------------------
 # External agent ingest.
 #
@@ -227,6 +241,7 @@ async def ingest(body: IngestBody,
             "latency_ms": round(r.latency_ms, 1) if (r.is_alive and r.latency_ms is not None) else None,
             "packet_loss": r.packet_loss if r.packet_loss is not None else (0.0 if r.is_alive else 1.0),
             "last_checked": now,
+            "down_since": monitor._down_since(ip, r.is_alive, now),
             "sources": monitor._labels(refs),
             "refs": refs,
         }

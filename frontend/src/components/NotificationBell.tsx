@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useAlerts, type AlertEvent } from "@/hooks/useAlerts";
+import { useAlerts, sendTestAlert, type AlertEvent } from "@/hooks/useAlerts";
+import { useAuth } from "@/hooks/useAuth";
 import { useT } from "@/i18n";
 
 type TFn = (s: string, v?: Record<string, string | number>) => string;
@@ -25,6 +26,7 @@ function toInternalPath(link?: string | null): string | null {
 function tone(kind: AlertEvent["kind"]) {
   if (kind === "recovered") return { dot: "#34d399", text: "text-green" };
   if (kind === "mass_outage") return { dot: "#fbbf24", text: "text-yellow" };
+  if (kind === "test") return { dot: "#60a5fa", text: "text-blue" };
   return { dot: "#fb7185", text: "text-red" };
 }
 
@@ -38,10 +40,13 @@ function ago(iso: string, t: TFn, skewMs = 0) {
 }
 
 export function NotificationBell() {
-  const { data } = useAlerts(true);
+  const { data, refetch } = useAlerts(true);
+  const { user } = useAuth();
   const t = useT();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [testMsg, setTestMsg] = useState<string | null>(null);
   const [lastSeen, setLastSeen] = useState<number>(() =>
     Number(localStorage.getItem(SEEN_KEY) || 0));
   const ref = useRef<HTMLDivElement>(null);
@@ -71,6 +76,28 @@ export function NotificationBell() {
     document.addEventListener("mousedown", h);
     return () => document.removeEventListener("mousedown", h);
   }, [open]);
+
+  const runTest = async () => {
+    setTesting(true);
+    setTestMsg(null);
+    try {
+      const r = await sendTestAlert();
+      // Report per-channel, and surface Telegram's own rejection text — a wrong
+      // token or a chat that never messaged the bot fails silently otherwise.
+      const parts: string[] = [];
+      if (r.telegram && !r.telegram_error) parts.push(t("Telegram sent ✓"));
+      else parts.push(t("Telegram: {err}", { err: r.telegram_error || t("not configured") }));
+      if (r.email) parts.push(t("Email sent ✓"));
+      if (r.webhook) parts.push(t("Webhook sent ✓"));
+      if (!r.alerts_enabled) parts.push(t("⚠ Alerts are OFF (ALERT_ENABLED=false) — automatic down alerts will not fire."));
+      setTestMsg(parts.join(" · "));
+      refetch();
+    } catch {
+      setTestMsg(t("Test failed — see server logs."));
+    } finally {
+      setTesting(false);
+    }
+  };
 
   const markSeen = () => {
     const now = Date.now();
@@ -143,8 +170,17 @@ export function NotificationBell() {
             )}
           </div>
           {data && (
-            <div className="px-4 py-2 border-t border-line text-[11px] text-muted2">
-              {t("Triggers after {n} failed checks · {m}m cooldown", { n: data.config.fail_threshold, m: data.config.cooldown_minutes })}
+            <div className="px-4 py-2 border-t border-line text-[11px] text-muted2 space-y-1.5">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span>{t("Triggers after {n} failed checks · {m}m cooldown", { n: data.config.fail_threshold, m: data.config.cooldown_minutes })}</span>
+                {user?.role === "admin" && (
+                  <button onClick={runTest} disabled={testing}
+                    className="ms-auto shrink-0 px-2 py-1 rounded-md border border-line2 font-bold text-muted hover:text-text disabled:opacity-50">
+                    {testing ? t("Sending…") : t("Send test")}
+                  </button>
+                )}
+              </div>
+              {testMsg && <p className="text-text leading-snug">{testMsg}</p>}
             </div>
           )}
         </div>

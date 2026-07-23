@@ -4,7 +4,7 @@ import { useMonitor } from "@/hooks/useMonitor";
 import { StatusDot } from "@/components/StatusDot";
 import { Breadcrumbs } from "@/components/Breadcrumbs";
 import { useT } from "@/i18n";
-import type { MonitorRef, PingStatus } from "@/types";
+import type { MonitorRef, MonitorResult, PingStatus } from "@/types";
 
 /** Pick the best link target for an IP: a focusable device on a tower, else its
  *  tower, else its IP-allocation row on the IP Allocations page. */
@@ -19,6 +19,17 @@ function towerLink(refs: MonitorRef[]): string | null {
 }
 
 type Filter = "all" | "up" | "down" | "unknown";
+type Sort = "problems" | "recent_down" | "longest_down" | "ip" | "latency";
+
+/** How long an IP has been continuously offline, as a compact label. */
+function downFor(iso: string | null, t: (s: string, v?: Record<string, string | number>) => string): string {
+  if (!iso) return "—";
+  const s = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 1000));
+  if (s < 60) return t("{n}s", { n: s });
+  if (s < 3600) return t("{n}m", { n: Math.round(s / 60) });
+  if (s < 86400) return t("{n}h {m}m", { n: Math.floor(s / 3600), m: Math.round((s % 3600) / 60) });
+  return t("{n}d {h}h", { n: Math.floor(s / 86400), h: Math.round((s % 86400) / 3600) });
+}
 
 function ago(iso: string | null, t: (s: string, v?: Record<string, string | number>) => string): string {
   if (!iso) return "—";
@@ -42,6 +53,7 @@ export default function Monitor() {
   const { data, isLoading, error } = useMonitor();
   const t = useT();
   const [filter, setFilter] = useState<Filter>("all");
+  const [sort, setSort] = useState<Sort>("problems");
   const [q, setQ] = useState("");
 
   const rows = useMemo(() => {
@@ -50,10 +62,39 @@ export default function Monitor() {
     const needle = q.trim().toLowerCase();
     if (needle) r = r.filter((x) =>
       x.ip.includes(needle) || x.sources.some((s) => s.toLowerCase().includes(needle)));
+
     // down first, then unknown, then up — surface problems
     const rank: Record<PingStatus, number> = { down: 0, unknown: 1, up: 2 };
-    return [...r].sort((a, b) => rank[a.status] - rank[b.status] || a.ip.localeCompare(b.ip));
-  }, [data, filter, q]);
+    const byIp = (a: MonitorResult, b: MonitorResult) => a.ip.localeCompare(b.ip);
+    // Still-up IPs have no down_since; they always sort after the offline ones
+    // regardless of direction, so the outage list stays at the top.
+    const since = (x: MonitorResult) => (x.down_since ? new Date(x.down_since).getTime() : null);
+    const byDown = (a: MonitorResult, b: MonitorResult, newestFirst: boolean) => {
+      const [sa, sb] = [since(a), since(b)];
+      if (sa == null && sb == null) return rank[a.status] - rank[b.status] || byIp(a, b);
+      if (sa == null) return 1;
+      if (sb == null) return -1;
+      return (newestFirst ? sb - sa : sa - sb) || byIp(a, b);
+    };
+
+    const cmp: Record<Sort, (a: MonitorResult, b: MonitorResult) => number> = {
+      problems: (a, b) => rank[a.status] - rank[b.status] || byIp(a, b),
+      recent_down: (a, b) => byDown(a, b, true),
+      longest_down: (a, b) => byDown(a, b, false),
+      ip: byIp,
+      // unreachable hosts have no latency — park them at the end
+      latency: (a, b) => (a.latency_ms ?? Infinity) - (b.latency_ms ?? Infinity) || byIp(a, b),
+    };
+    return [...r].sort(cmp[sort]);
+  }, [data, filter, q, sort]);
+
+  const sorts: { key: Sort; label: string }[] = [
+    { key: "problems", label: t("Problems first") },
+    { key: "recent_down", label: t("Recently went offline") },
+    { key: "longest_down", label: t("Offline the longest") },
+    { key: "ip", label: t("IP address") },
+    { key: "latency", label: t("Latency") },
+  ];
 
   const tabs: { key: Filter; label: string; cls?: string }[] = [
     { key: "all", label: t("All {n}", { n: data?.total ?? 0 }) },
@@ -99,8 +140,15 @@ export default function Monitor() {
             {t.label}
           </button>
         ))}
+        <select value={sort} onChange={(e) => setSort(e.target.value as Sort)}
+          aria-label={t("Sort by")}
+          className="sm:ms-auto bg-bg2 border border-line rounded-lg px-2 py-1.5 text-xs font-bold text-muted outline-none focus:border-blue">
+          {sorts.map((s) => (
+            <option key={s.key} value={s.key}>{t("Sort: {label}", { label: s.label })}</option>
+          ))}
+        </select>
         <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("Filter by IP or source…")}
-          className="sm:ms-auto bg-bg2 border border-line rounded-lg px-3 py-1.5 text-sm outline-none focus:border-blue w-full sm:w-56" />
+          className="bg-bg2 border border-line rounded-lg px-3 py-1.5 text-sm outline-none focus:border-blue w-full sm:w-56" />
       </div>
 
       {isLoading ? (
@@ -114,7 +162,7 @@ export default function Monitor() {
           <table className="w-full border-collapse text-[12.5px]">
             <thead>
               <tr>
-                {["Status", "IP", "Latency", "Loss", "Source", "Checked"].map((h) => (
+                {["Status", "IP", "Down for", "Latency", "Loss", "Source", "Checked"].map((h) => (
                   <th key={h} className="sticky top-0 z-10 bg-panel text-start px-3 py-2 text-[9.5px] uppercase tracking-wide text-muted2 font-extrabold border-b border-line">{t(h)}</th>
                 ))}
               </tr>
@@ -134,6 +182,10 @@ export default function Monitor() {
                         <span>{r.ip}</span>
                       );
                     })()}
+                  </td>
+                  <td className={`px-3 py-2 whitespace-nowrap ${r.down_since ? "text-red font-semibold" : "text-muted2"}`}
+                      title={r.down_since ? new Date(r.down_since).toLocaleString() : undefined}>
+                    {downFor(r.down_since, t)}
                   </td>
                   <td className="px-3 py-2 text-muted">{r.latency_ms != null ? `${r.latency_ms} ms` : "—"}</td>
                   <td className="px-3 py-2 text-muted">{r.status === "up" ? `${Math.round(r.packet_loss * 100)}%` : "—"}</td>

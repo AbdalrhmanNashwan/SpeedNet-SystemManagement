@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import api from "@/lib/api";
 
 export type AlertEvent = {
-  kind: "down" | "recovered" | "mass_outage";
+  kind: "down" | "recovered" | "mass_outage" | "test";
   title: string;
   body: string;
   at: string;
@@ -25,6 +25,7 @@ export type AlertFeed = {
     mass_outage_min: number;
     webhook: boolean;
     email: boolean;
+    telegram: boolean;
   };
   events: AlertEvent[];
   /** server_now − client_now at fetch time (ms); add to Date.now() so "ago"
@@ -48,4 +49,20 @@ export function useAlerts(enabled: boolean) {
     refetchInterval: POLL_MS,
     refetchIntervalInBackground: false,
   });
+}
+
+export type AlertTestResult = {
+  alerts_enabled: boolean;
+  telegram: boolean;
+  telegram_error: string;
+  email: boolean;
+  webhook: boolean;
+};
+
+/** Admin-only: push a test alert through every configured channel. Returns
+ *  which channels are wired up, plus Telegram's own error text if it refused —
+ *  the only way to tell a misconfigured bot from a quiet network. */
+export async function sendTestAlert(): Promise<AlertTestResult> {
+  const { data } = await api.post<AlertTestResult>("/monitor/alerts/test");
+  return data;
 }

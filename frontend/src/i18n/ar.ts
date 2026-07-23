@@ -204,6 +204,17 @@ export const ar: Record<string, string> = {
   "Loss": "نسبة الفقد",
   "Source": "المصدر",
   "Checked": "آخر فحص",
+  "Down for": "مدة الانقطاع",
+  "Sort by": "الترتيب حسب",
+  "Sort: {label}": "الترتيب: {label}",
+  "Problems first": "الأعطال أولاً",
+  "Recently went offline": "الأحدث انقطاعاً",
+  "Offline the longest": "الأطول انقطاعاً",
+  "IP address": "عنوان الـ IP",
+  "{n}s": "{n} ثانية",
+  "{n}m": "{n} دقيقة",
+  "{n}h {m}m": "{n} ساعة و{m} دقيقة",
+  "{n}d {h}h": "{n} يوم و{h} ساعة",
 
   // ---- Backups ----
   "Download a snapshot of all data, or restore the database from a backup archive. Archives are named by date & time":
@@ -259,6 +270,16 @@ export const ar: Record<string, string> = {
     "لا توجد تنبيهات بعد. ستظهر هنا حالات انقطاع الأجهزة وعودتها.",
   "Triggers after {n} failed checks · {m}m cooldown":
     "يُطلَق بعد {n} محاولات فاشلة · مهلة {m} دقيقة",
+  "Send test": "إرسال اختبار",
+  "Sending…": "جارٍ الإرسال…",
+  "Telegram sent ✓": "تم الإرسال عبر تيليجرام ✓",
+  "Telegram: {err}": "تيليجرام: {err}",
+  "not configured": "غير مُهيّأ",
+  "Email sent ✓": "تم الإرسال عبر البريد الإلكتروني ✓",
+  "Webhook sent ✓": "تم الإرسال عبر الـ Webhook ✓",
+  "⚠ Alerts are OFF (ALERT_ENABLED=false) — automatic down alerts will not fire.":
+    "⚠ التنبيهات متوقفة (ALERT_ENABLED=false) — لن تُرسَل تنبيهات الانقطاع التلقائية.",
+  "Test failed — see server logs.": "فشل الاختبار — راجع سجلات الخادم.",
   "just now": "الآن",
   "{n}m ago": "قبل {n} دقيقة",
   "{n}h ago": "قبل {n} ساعة",

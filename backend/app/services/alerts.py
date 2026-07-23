@@ -100,6 +100,10 @@ class AlertManager:
         self._mass_outage_active = False
         self._last_mass_alert: datetime | None = None
         self.events: deque[dict] = deque(maxlen=settings.ALERT_HISTORY_SIZE)
+        # Why the last Telegram send failed, surfaced by send_test(). Telegram
+        # rejects silently from the app's point of view (we never raise), so
+        # without this a bad token looks identical to a healthy quiet network.
+        self._last_tg_error: str | None = None
 
     # -- public API ---------------------------------------------------------
     async def process_sweep(self, results: dict[str, dict]) -> None:
@@ -109,6 +113,40 @@ class AlertManager:
             await self._process(results)
         except Exception:                    # never let alerting break the loop
             log.exception("alerts: process_sweep failed")
+
+    async def send_test(self, by: str) -> dict[str, bool | str]:
+        """Fire a test alert through every configured channel and report which
+        ones actually accepted it. Used by the admin-only /monitor/alerts/test
+        endpoint — without it there's no way to tell a *silent* network from a
+        misconfigured bot token, which is exactly how alerting rots unnoticed.
+
+        Deliberately ignores ALERT_ENABLED: you need to be able to test the
+        channels *before* turning alerting on.
+        """
+        title = "🔔 TEST alert"
+        body = (f"Test alert requested by {by}. If you can read this, this channel "
+                f"is configured correctly — no device is actually down.")
+        link = _console_link("/monitor")
+        event = {"kind": "test", "title": title, "body": body,
+                 "at": _now().isoformat(), "link": link}
+        self.events.append(event)
+        self._last_tg_error = None
+        await asyncio.gather(
+            self._send_telegram(title, body, link),
+            self._send_email(title, body, link),
+            self._send_webhook(event),
+            return_exceptions=True,
+        )
+        return {
+            "alerts_enabled": settings.ALERT_ENABLED,
+            "telegram": self._tg_configured(),
+            "telegram_error": self._last_tg_error or "",
+            "email": bool(settings.ALERT_SMTP_HOST and settings.ALERT_EMAIL_TO),
+            "webhook": bool(settings.ALERT_WEBHOOK_URL),
+        }
+
+    def _tg_configured(self) -> bool:
+        return bool(settings.ALERT_TELEGRAM_BOT_TOKEN and settings.ALERT_TELEGRAM_CHAT_ID)
 
     def recent(self, limit: int = 50) -> list[dict]:
         items = list(self.events)[-limit:]
@@ -228,6 +266,7 @@ class AlertManager:
     async def _send_telegram(self, title: str, body: str, link: str | None = None) -> None:
         s = settings
         if not (s.ALERT_TELEGRAM_BOT_TOKEN and s.ALERT_TELEGRAM_CHAT_ID):
+            self._last_tg_error = "not configured (bot token / chat id missing)"
             return
         # HTML parse mode: bold title, plain body. Escape the few chars that are
         # special to Telegram's HTML so device labels/IPs can't break the markup.
@@ -248,8 +287,10 @@ class AlertManager:
                 if resp.status_code != 200:
                     # Telegram returns a JSON description on failure (bad token,
                     # chat not started, etc.) — log it but never raise.
+                    self._last_tg_error = f"HTTP {resp.status_code}: {resp.text[:200]}"
                     log.warning("alert telegram failed: %s %s", resp.status_code, resp.text[:200])
         except Exception as exc:
+            self._last_tg_error = str(exc)[:200]
             log.warning("alert telegram failed: %s", exc)
 
     async def _send_email(self, subject: str, body: str, link: str | None = None) -> None:

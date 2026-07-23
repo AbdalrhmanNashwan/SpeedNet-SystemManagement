@@ -66,6 +66,20 @@ def _labels(refs: list[dict]) -> list[str]:
     return sorted({r["label"] for r in refs})
 
 
+def _down_since(ip: str, is_alive: bool, now: str) -> str | None:
+    """Start time of the outage this IP is *currently* in, or None if it's up.
+
+    Carried forward unchanged across sweeps, so it marks when the IP first went
+    down rather than when we last checked it (`last_checked` is the same for
+    every IP in a sweep and is useless for ranking). This is what the Monitor
+    page sorts on for "recently went offline".
+    """
+    if is_alive:
+        return None
+    prev = state.results.get(ip)
+    return (prev or {}).get("down_since") or now
+
+
 def _parse_ip(raw: str | None) -> str | None:
     """Best-effort extraction of a single host IP from a messy text field.
 
@@ -216,6 +230,7 @@ async def _ping_batch(addresses: list[str]) -> None:
             "latency_ms": round(host.avg_rtt, 1) if host.is_alive else None,
             "packet_loss": host.packet_loss,
             "last_checked": now,
+            "down_since": _down_since(ip, host.is_alive, now),
             "sources": _labels(refs),
             "refs": refs,
         }
@@ -271,12 +286,14 @@ async def check_ip(raw: str) -> dict | None:
                 privileged=settings.MONITOR_PRIVILEGED,
             )
     refs = state.refs.get(ip) or state.results.get(ip, {}).get("refs", [])
+    checked_at = datetime.now(timezone.utc).isoformat()
     result = {
         "ip": ip,
         "status": "up" if host.is_alive else "down",
         "latency_ms": round(host.avg_rtt, 1) if host.is_alive else None,
         "packet_loss": host.packet_loss,
-        "last_checked": datetime.now(timezone.utc).isoformat(),
+        "last_checked": checked_at,
+        "down_since": _down_since(ip, host.is_alive, checked_at),
         "sources": _labels(refs),
         "refs": refs,
     }
