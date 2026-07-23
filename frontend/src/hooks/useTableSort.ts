@@ -11,10 +11,10 @@ export type Accessors<T> = Record<string, (row: T) => unknown>;
 /**
  * Click-to-sort state for a table.
  *
- * Cycles asc → desc → off. The third click matters: for several tables the
- * incoming order is meaningful (History is newest-first from the server,
- * device rows are in insertion order), so "no sort" has to stay reachable
- * rather than being trapped between two sorted views.
+ * Two states only: a column is either ascending or descending. Clicking the
+ * active column flips it; clicking a different one starts that column at
+ * ascending. There is deliberately no third "unsorted" click — it reads as the
+ * sort randomly breaking.
  */
 export function useTableSort<T>(
   rows: T[],
@@ -34,11 +34,9 @@ export function useTableSort<T>(
 
   const toggle = (key: string) =>
     setSort((s) =>
-      !s || s.key !== key
-        ? { key, dir: "asc" }
-        : s.dir === "asc"
-          ? { key, dir: "desc" }
-          : null,
+      s && s.key === key
+        ? { key, dir: s.dir === "asc" ? "desc" : "asc" }
+        : { key, dir: "asc" },
     );
 
   return { sorted, sort, toggle, setSort };

@@ -1,6 +1,8 @@
 import { useRef, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import api from "@/lib/api";
+import { SortableTh } from "@/components/SortableTh";
+import { useTableSort } from "@/hooks/useTableSort";
 import { toast } from "@/lib/toast";
 import { useT } from "@/i18n";
 
@@ -30,6 +32,10 @@ export default function Backups() {
   const { data, isLoading } = useBackups();
   const fileRef = useRef<HTMLInputElement>(null);
   const [pending, setPending] = useState<File | null>(null);
+  // Newest first by default — that's the one you almost always want.
+  const { sorted, sort, toggle: toggleSort } = useTableSort(data?.backups ?? [], {
+    initial: { key: "mtime", dir: "desc" },
+  });
 
   const runBackup = useMutation({
     mutationFn: async () => (await api.post("/backups/run")).data,
@@ -148,25 +154,33 @@ export default function Backups() {
       ) : !data?.backups.length ? (
         <div className="text-muted text-sm">{t("No backups yet.")}</div>
       ) : (
-        <div className="rounded-xl border border-line overflow-hidden">
-          {data.backups.map((b) => (
-            <div
-              key={b.name}
-              className="flex items-center gap-3 px-4 py-2.5 border-b border-line/40 last:border-0 text-sm">
-              <span className="font-mono text-text truncate">{b.name}</span>
-              <span className="text-muted2 text-xs ms-auto whitespace-nowrap">
-                {fmtTime(b.mtime)}
-              </span>
-              <span className="text-muted2 text-xs whitespace-nowrap w-16 text-end">
-                {fmtSize(b.size_bytes)}
-              </span>
-              <button
-                onClick={() => download(b.name)}
-                className="text-xs text-cyan hover:underline whitespace-nowrap">
-                {t("Download")}
-              </button>
-            </div>
-          ))}
+        <div className="rounded-xl border border-line overflow-auto max-h-[60vh]">
+          <table className="w-full border-collapse text-sm">
+            <thead>
+              <tr>
+                <SortableTh label={t("Name")} sortKey="name" sort={sort} onSort={toggleSort} />
+                <SortableTh label={t("Created")} sortKey="mtime" sort={sort} onSort={toggleSort} />
+                <SortableTh label={t("Size")} sortKey="size_bytes" sort={sort} onSort={toggleSort} />
+                <SortableTh label="" sort={sort} onSort={toggleSort} />
+              </tr>
+            </thead>
+            <tbody>
+              {sorted.map((b) => (
+                <tr key={b.name} className="border-b border-line/40 last:border-0">
+                  <td className="px-3 py-2.5 font-mono text-text truncate">{b.name}</td>
+                  <td className="px-3 py-2.5 text-muted2 text-xs whitespace-nowrap">{fmtTime(b.mtime)}</td>
+                  <td className="px-3 py-2.5 text-muted2 text-xs whitespace-nowrap">{fmtSize(b.size_bytes)}</td>
+                  <td className="px-3 py-2.5 text-end">
+                    <button
+                      onClick={() => download(b.name)}
+                      className="text-xs text-cyan hover:underline whitespace-nowrap">
+                      {t("Download")}
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
     </div>
