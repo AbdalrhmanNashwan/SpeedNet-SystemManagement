@@ -334,6 +334,9 @@ async def run_monitor() -> None:
                 if state.refs:
                     await _sweep()
                     state.error = None
+                    if settings.OUTAGE_HISTORY_ENABLED:
+                        from app.services.outages import recorder
+                        await recorder.process_sweep(state.results)
                     from app.services.alerts import manager as alert_manager
                     await alert_manager.process_sweep(state.results)
                 else:

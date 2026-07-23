@@ -5,7 +5,8 @@ from app.models.device import Link, Switch, Sector, Server
 from app.models.misc import IPAllocation, BackboneFeed, RoutingPoint, Subscriber
 from app.models.user import User
 from app.models.audit import AuditLog
+from app.models.outage import OutageEvent
 
 __all__ = ["Zone", "Tower", "Link", "Switch", "Sector", "Server",
            "IPAllocation", "BackboneFeed", "RoutingPoint", "Subscriber",
-           "User", "AuditLog"]
+           "User", "AuditLog", "OutageEvent"]

@@ -60,6 +60,22 @@ async def _zone_of_towers(db: AsyncSession) -> dict[int, int | None]:
     return {tid: zid for tid, zid in rows}
 
 
+async def _agent_tower_ids(db: AsyncSession, user: User) -> list[int]:
+    """Tower ids inside an agent's zone, for scoping history queries.
+
+    An agent with no zone gets an empty list, which filters everything out —
+    the same strict rule the live-status endpoints use. Returning [-1] rather
+    than [] is unnecessary here: `IN ()` on an empty list is valid SQLAlchemy
+    and evaluates to false.
+    """
+    if user.zone_id is None:
+        return []
+    rows = (await db.execute(
+        select(Tower.id).where(Tower.zone_id == user.zone_id)
+    )).scalars().all()
+    return list(rows)
+
+
 router = APIRouter(prefix="/monitor", tags=["monitor"])
 
 
@@ -160,6 +176,122 @@ async def alerts(
     }
 
 
+@router.get("/outages")
+async def outages(
+    days: int = 30,
+    limit: int = 200,
+    ip: str | None = None,
+    tower_id: int | None = None,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Recorded outages, newest first. Agents see only their own zone.
+
+    Ongoing outages have `ended_at: null` and are always included regardless of
+    the window — an outage that started before the window but is still running
+    is the most relevant row on the page.
+    """
+    from datetime import timedelta
+    from sqlalchemy import or_
+    from app.models.outage import OutageEvent
+
+    since = datetime.now(timezone.utc) - timedelta(days=max(1, min(days, 365)))
+    q = select(OutageEvent).where(
+        or_(OutageEvent.started_at >= since, OutageEvent.ended_at.is_(None))
+    )
+    if ip:
+        q = q.where(OutageEvent.ip == ip)
+    if tower_id is not None:
+        q = q.where(OutageEvent.tower_id == tower_id)
+    if user.role == "agent":
+        q = q.where(OutageEvent.tower_id.in_(await _agent_tower_ids(db, user)))
+
+    q = q.order_by(OutageEvent.started_at.desc()).limit(max(1, min(limit, 1000)))
+    rows = (await db.execute(q)).scalars().all()
+    now = datetime.now(timezone.utc)
+    return {
+        "now": now.isoformat(),
+        "days": days,
+        "outages": [
+            {
+                "id": o.id,
+                "ip": o.ip,
+                "tower_id": o.tower_id,
+                "tower_name": o.tower_name,
+                "label": o.label,
+                "started_at": o.started_at.isoformat(),
+                "ended_at": o.ended_at.isoformat() if o.ended_at else None,
+                # Ongoing outages have no stored duration yet — compute the
+                # running length so the UI doesn't have to special-case it.
+                "duration_seconds": (
+                    o.duration_seconds if o.ended_at
+                    else int((now - o.started_at).total_seconds())
+                ),
+                "ongoing": o.ended_at is None,
+            }
+            for o in rows
+        ],
+    }
+
+
+@router.get("/uptime")
+async def uptime(
+    days: int = 30,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Per-IP downtime totals over the window, worst first.
+
+    Uptime % is measured against the window length, and outages are clipped to
+    the window so one long outage that predates it can't push a figure below
+    0%. Only IPs that actually had an outage appear — everything else was at
+    100% by definition.
+    """
+    from datetime import timedelta
+    from sqlalchemy import or_
+    from app.models.outage import OutageEvent
+
+    days = max(1, min(days, 365))
+    now = datetime.now(timezone.utc)
+    since = now - timedelta(days=days)
+    window = days * 86400.0
+
+    q = select(OutageEvent).where(
+        or_(OutageEvent.started_at >= since, OutageEvent.ended_at.is_(None),
+            OutageEvent.ended_at >= since)
+    )
+    if user.role == "agent":
+        q = q.where(OutageEvent.tower_id.in_(await _agent_tower_ids(db, user)))
+    rows = (await db.execute(q)).scalars().all()
+
+    agg: dict[str, dict] = {}
+    for o in rows:
+        start = max(o.started_at, since)
+        end = min(o.ended_at or now, now)
+        secs = max(0.0, (end - start).total_seconds())
+        a = agg.setdefault(o.ip, {
+            "ip": o.ip, "tower_id": o.tower_id, "tower_name": o.tower_name,
+            "label": o.label, "outages": 0, "downtime_seconds": 0.0,
+            "last_outage_at": None, "ongoing": False,
+        })
+        a["outages"] += 1
+        a["downtime_seconds"] += secs
+        a["ongoing"] = a["ongoing"] or o.ended_at is None
+        iso = o.started_at.isoformat()
+        if a["last_outage_at"] is None or iso > a["last_outage_at"]:
+            a["last_outage_at"] = iso
+
+    items = []
+    for a in agg.values():
+        a["downtime_seconds"] = int(a["downtime_seconds"])
+        a["uptime_pct"] = round(max(0.0, 100.0 * (1 - a["downtime_seconds"] / window)), 4)
+        items.append(a)
+    items.sort(key=lambda x: x["downtime_seconds"], reverse=True)
+
+    return {"now": now.isoformat(), "days": days, "window_seconds": int(window),
+            "items": items}
+
+
 @router.post("/alerts/test")
 @limiter.limit("6/minute")
 async def alerts_test(request: Request,
@@ -255,6 +387,13 @@ async def ingest(body: IngestBody,
     st.sweep_completed_at = now
     st.cycle += 1
     st.error = None
+
+    if settings.OUTAGE_HISTORY_ENABLED:
+        try:
+            from app.services.outages import recorder
+            await recorder.process_sweep(st.results)
+        except Exception:  # never let recording break ingest
+            pass
 
     if settings.ALERT_ENABLED:
         try:

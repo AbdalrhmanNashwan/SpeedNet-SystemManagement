@@ -13,6 +13,7 @@ const TowerDetail = lazy(() => import("@/pages/TowerDetail"));
 const DeviceList = lazy(() => import("@/pages/DeviceList"));
 const SearchResults = lazy(() => import("@/pages/SearchResults"));
 const Monitor = lazy(() => import("@/pages/Monitor"));
+const Uptime = lazy(() => import("@/pages/Uptime"));
 const TowersMap = lazy(() => import("@/pages/TowersMap"));
 const SourceSwitches = lazy(() => import("@/pages/SourceSwitches"));
 const IpAllocations = lazy(() => import("@/pages/IpAllocations"));
@@ -54,6 +55,7 @@ function Nav() {
     { to: "/devices/switches", label: t("Switches") },
     { to: "/devices/sectors", label: t("Sectors") },
     { to: "/monitor", label: t("Monitor") },
+    { to: "/uptime", label: t("Uptime") },
     { to: "/map", label: t("Map") },
     { to: "/sources", label: t("Sources") },
     ...(user.role === "admin" ? [{ to: "/history", label: t("History") }, { to: "/users", label: t("Users") }, { to: "/backups", label: t("Backups") }] : []),
@@ -158,6 +160,7 @@ function AppRoutes() {
         <Route path="/devices/:type" element={<Guard><DeviceList /></Guard>} />
         <Route path="/search" element={<Guard><SearchResults /></Guard>} />
         <Route path="/monitor" element={<Guard><Monitor /></Guard>} />
+        <Route path="/uptime" element={<Guard><Uptime /></Guard>} />
         <Route path="/map" element={<Guard><TowersMap /></Guard>} />
         <Route path="/sources" element={<Guard><SourceSwitches /></Guard>} />
         <Route path="/ip-allocations" element={<Guard ipAccess><IpAllocations /></Guard>} />

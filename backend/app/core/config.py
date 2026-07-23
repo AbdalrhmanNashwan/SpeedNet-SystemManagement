@@ -92,6 +92,15 @@ class Settings(BaseSettings):
     # and pushes status to /monitor/ingest using this token. Empty = disabled.
     MONITOR_AGENT_TOKEN: str = ""
 
+    # ---- Outage history (durable, for uptime reporting) ----
+    # Recorded independently of ALERT_* on purpose: alerting is throttled by
+    # cooldowns and the mass-outage freeze, and reusing those gates here would
+    # leave holes in the history. Turn off only if you don't want the table
+    # written at all.
+    OUTAGE_HISTORY_ENABLED: bool = True
+    OUTAGE_FAIL_THRESHOLD: int = 3
+    OUTAGE_RECOVER_THRESHOLD: int = 2
+
     # ---- Down-alert notifications ----
     # Off by default; turn on once a channel below is configured.
     ALERT_ENABLED: bool = False
