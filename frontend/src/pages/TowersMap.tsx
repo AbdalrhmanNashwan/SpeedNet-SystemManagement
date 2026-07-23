@@ -1,6 +1,7 @@
-import { useMemo } from "react";
-import { Link } from "react-router-dom";
-import { MapContainer, TileLayer, CircleMarker, Polyline, Popup } from "react-leaflet";
+import { useEffect, useMemo, useRef, type MutableRefObject } from "react";
+import { Link, useSearchParams } from "react-router-dom";
+import { MapContainer, TileLayer, CircleMarker, Polyline, Popup, useMap } from "react-leaflet";
+import type { CircleMarker as LeafletCircleMarker } from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { useTowers } from "@/hooks/useTowers";
 import { useMonitor } from "@/hooks/useMonitor";
@@ -77,11 +78,48 @@ function digits(phone: string | null | undefined): string {
   return (phone ?? "").replace(/\D/g, "");
 }
 
+/**
+ * Runs inside <MapContainer> (needs useMap()). When a tower id is requested
+ * via ?tower=, centers on it and opens its popup once it's actually placed on
+ * the map — the marker ref may not exist yet on the first render after the
+ * towers/monitor data loads, so this re-checks whenever `placed` changes
+ * rather than firing once.
+ */
+function FocusTower({
+  targetId, placed, markerRefs,
+}: {
+  targetId: number | null;
+  placed: Placed[];
+  markerRefs: MutableRefObject<Map<number, LeafletCircleMarker>>;
+}) {
+  const map = useMap();
+  const done = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (targetId == null || done.current === targetId) return;
+    const tower = placed.find((p) => p.id === targetId);
+    const marker = markerRefs.current.get(targetId);
+    if (!tower || !marker) return; // not placed (yet, or no GPS) -- nothing to focus
+    map.setView([tower.lat, tower.lng], Math.max(map.getZoom(), 15));
+    marker.openPopup();
+    done.current = targetId;
+  }, [targetId, placed, markerRefs, map]);
+
+  return null;
+}
+
 /** Live network map: every tower with valid GPS, colored by its ping status. */
 export default function TowersMap() {
   const { data: towers, isLoading, error } = useTowers();
   const { data: monitor } = useMonitor();
   const t = useT();
+  const [searchParams] = useSearchParams();
+  const focusTowerId = (() => {
+    const raw = searchParams.get("tower");
+    const n = raw ? Number(raw) : NaN;
+    return Number.isFinite(n) ? n : null;
+  })();
+  const markerRefs = useRef(new Map<number, LeafletCircleMarker>());
 
   // tower_id -> {up, down} counts across all IPs referencing that tower, then
   // bucketed into a health level. Each IP counts once per tower (a shared IP
@@ -141,6 +179,8 @@ export default function TowersMap() {
   }, [placed]);
 
   const total = towers?.length ?? 0;
+  const focusTowerMissing =
+    focusTowerId != null && !isLoading && towers != null && !placed.some((p) => p.id === focusTowerId);
 
   return (
     <main className="max-w-6xl mx-auto px-4 sm:px-6 py-10">
@@ -160,6 +200,12 @@ export default function TowersMap() {
           </p>
         </div>
       </div>
+
+      {focusTowerMissing && (
+        <div className="text-xs text-yellow bg-yellow/10 border border-yellow/30 rounded-lg px-3 py-2 mb-4">
+          {t("That tower doesn't have GPS coordinates yet, so it can't be shown on the map.")}
+        </div>
+      )}
 
       {/* legend */}
       <div className="flex flex-wrap items-center gap-4 mb-4 text-xs">
@@ -195,6 +241,8 @@ export default function TowersMap() {
               url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
             />
 
+            <FocusTower targetId={focusTowerId} placed={placed} markerRefs={markerRefs} />
+
             {edges.map((e, i) => (
               <Polyline
                 key={i}
@@ -206,6 +254,10 @@ export default function TowersMap() {
             {placed.map((p) => (
               <CircleMarker
                 key={p.id}
+                ref={(el) => {
+                  if (el) markerRefs.current.set(p.id, el);
+                  else markerRefs.current.delete(p.id);
+                }}
                 center={[p.lat, p.lng]}
                 radius={7}
                 pathOptions={{

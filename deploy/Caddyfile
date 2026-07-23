@@ -20,7 +20,7 @@ speednetiq.duckdns.org {
 		Referrer-Policy "strict-origin-when-cross-origin"
 		# Restrict what the page may load. 'self' only, plus Google Fonts
 		# (the UI uses IBM Plex) and inline styles/scripts the SPA needs.
-		Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'"
+		Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: https://*.tile.openstreetmap.org; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'"
 		# Don't advertise the server software
 		-Server
 	}

@@ -96,6 +96,13 @@ export function EditableField({
   }
 
   const commit = async (v: string) => {
+    // Re-entrancy guard: pressing Enter sets saving=true, which disables this
+    // input -- and browsers fire a native blur on a focused element the
+    // instant it's disabled, which re-invokes commit() via onBlur while the
+    // first save is still in flight. Without this guard that fires two
+    // concurrent PATCH requests for one save (confirmed 2026-07-23: this is
+    // what caused the "error, but then saved anyway" bug on device edits).
+    if (saving) return;
     setSaving(true);
     try { await onSave(v.trim()); setEditing(false); setCustomMode(false); }
     finally { setSaving(false); }

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useParams, useNavigate, useSearchParams } from "react-router-dom";
+import { useParams, useNavigate, useSearchParams, Link } from "react-router-dom";
 import { useTower, useUpdateTower, useDeleteTower } from "@/hooks/useTowers";
 import { useDevices, useCreateDevice } from "@/hooks/useDevices";
 import { useZones } from "@/hooks/useZones";
@@ -49,6 +49,15 @@ const SERVICE_FIELDS: { key: keyof Tower; label: string; mono?: boolean; options
   { key: "feed_port", label: "Port", mono: true, options: PORT_OPTIONS },
   { key: "feed_mode", label: "Mode", options: FEED_MODE_OPTIONS },
 ];
+
+/** Same validity rule as the map page: both coords parse, in-range, not the 0,0 placeholder. */
+function hasUsableCoords(lat: string | null | undefined, lng: string | null | undefined): boolean {
+  const a = Number(lat), b = Number(lng);
+  if (!lat || !lng || !Number.isFinite(a) || !Number.isFinite(b)) return false;
+  if (Math.abs(a) > 90 || Math.abs(b) > 180) return false;
+  if (a === 0 && b === 0) return false;
+  return true;
+}
 
 function DeviceSection({
   towerId, section, canCreate, canUpdate, canDelete, highlightId,
@@ -152,12 +161,23 @@ export default function TowerDetail() {
             {tower.status}
           </span>
         </div>
-        {canDelete && (
-          <button onClick={handleDelete}
-            className="text-xs text-red hover:underline shrink-0 mt-1">
-            {t("Delete tower")}
-          </button>
-        )}
+        <div className="flex items-center gap-4 shrink-0 mt-1">
+          {hasUsableCoords(tower.gps_lat, tower.gps_lng) ? (
+            <Link to={`/map?tower=${tower.id}`} className="text-xs text-cyan hover:underline">
+              {t("🗺️ View on map")}
+            </Link>
+          ) : (
+            <span className="text-xs text-muted2" title={t("Add GPS coordinates below to enable this")}>
+              {t("🗺️ No GPS yet")}
+            </span>
+          )}
+          {canDelete && (
+            <button onClick={handleDelete}
+              className="text-xs text-red hover:underline">
+              {t("Delete tower")}
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Meta grid */}
