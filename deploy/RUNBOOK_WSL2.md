@@ -202,19 +202,13 @@ still breaks the site** — check this before assuming an app problem:
 
 ## Known open items (not silently resolved)
 
-- **Unattended reboot gap.** `docker`/the containers restart automatically
-  *inside* WSL2 (`restart: unless-stopped` + systemd `docker.service` enabled),
-  but WSL2 itself only starts when the scheduled task **`SpeedNet-WSL-AutoStart`**
-  fires, and that task is currently set to trigger on **interactive logon of
-  user MSR** — with Windows auto-logon disabled. That means after a real power
-  loss/reboot, the stack (and the 5-minute self-heal) stays inactive until
-  someone logs into Windows at the console once. To fix properly (needs your
-  Windows password, which I won't handle myself — see the 2026-07-22 notes on
-  why): open Task Scheduler → `SpeedNet-WSL-AutoStart` → Properties →
-  General tab → check **"Run whether user is logged on or not"** and enter
-  your password when prompted, then change the trigger to **"At startup"**.
-  Same applies to `SpeedNet-Ensure-Running` if you want the 5-minute self-heal
-  to run before any logon too.
+- **Unattended reboot gap — RESOLVED 2026-07-23.** Both **`SpeedNet-WSL-AutoStart`**
+  (trigger: At system start up) and **`SpeedNet-Ensure-Running`** (5-min repeat)
+  are now set to **"Run whether user is logged on or not"** (`LogonType=Password`,
+  `RunLevel=HighestAvailable`). After a real power loss/reboot the stack now
+  comes up and self-heals with **no login required**. Note: because the tasks
+  store MSR's Windows password, changing that Windows password later will break
+  both tasks until the password is re-entered in Task Scheduler.
 - **BIOS "AC Power Recovery"** (auto power-on after an actual power outage) is
   outside Windows entirely — can't be set from here. Check it in BIOS setup if
   you want the physical machine to power back on by itself after a real outage.
