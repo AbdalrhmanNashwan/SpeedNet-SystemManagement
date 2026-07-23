@@ -33,3 +33,7 @@ HOW_TO_RUN.md
 .claude/
 .vscode/
 .idea/
+
+# auto-deploy runtime state (server-side only)
+.auto-deploy.lock
+.auto-deploy.failed
