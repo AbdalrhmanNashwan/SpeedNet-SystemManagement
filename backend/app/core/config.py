@@ -40,6 +40,9 @@ class Settings(BaseSettings):
     # Deployment environment. "production" turns on prod-only hardening such as
     # HSTS; leave as "dev" locally. Set ENV=production in the production .env.
     ENV: str = "dev"
+    # Root log level for the app's own loggers (monitor, alerts, outages,
+    # backup). DEBUG is very chatty on a per-sweep basis — leave at INFO.
+    LOG_LEVEL: str = "INFO"
 
     # Auth
     SECRET_KEY: str = "CHANGE_ME_run_openssl_rand_hex_32"

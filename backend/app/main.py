@@ -20,6 +20,17 @@ from app.services import monitor, backup
 
 log = logging.getLogger("uvicorn.error")
 
+# The app's own loggers ("monitor", "monitor.alerts", "monitor.outages",
+# "backup") had no handler and inherited the root default of WARNING, so every
+# log.info() they emitted was silently discarded — including "tracking N IPs"
+# and every recorded outage. Only unhandled exceptions surfaced, via Python's
+# handler of last resort. Route them to stderr at INFO so `docker compose logs`
+# actually shows what the background workers are doing.
+logging.basicConfig(
+    level=getattr(logging, settings.LOG_LEVEL.upper(), logging.INFO),
+    format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
+)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
