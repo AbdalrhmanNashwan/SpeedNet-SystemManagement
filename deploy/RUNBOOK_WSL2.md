@@ -86,9 +86,38 @@ docker compose logs -f db
 docker compose logs -f caddy        # TLS cert issuance/renewal, reverse proxy
 ```
 
+## Auto-deploy (push to main → live in ≤5 min)
+
+`deploy/auto-deploy.sh` runs from cron every 5 minutes and deploys whenever
+`origin/main` advances. Log: `/mnt/e/deploy/logs/auto-deploy.log` = `E:\deploy\logs\`.
+
+**It fails safe.** The previous commit is captured *before* the fast-forward,
+so any failure (merge, build, or health check) resets the repo to it and
+rebuilds the last known-good stack. Health is verified, not assumed: the API
+must answer `/health` **and** Caddy must reach the frontend — containers
+reporting "Started" isn't enough, because the backend runs migrations at
+startup and can die afterwards.
+
+A failed commit is recorded in `.auto-deploy.failed` and skipped from then on,
+so a bad commit doesn't retry-loop every 5 minutes. **Deploys resume by
+themselves once you push a fix.** Failures and recoveries are pushed to
+Telegram.
+
+**Gotcha that already bit us once:** git tracks the executable bit. Someone ran
+`chmod +x` on `auto-deploy.sh` on the server while git had it as 644, which
+left the production repo permanently dirty on a mode change and silently
+blocked `git merge --ff-only`. Both scripts are now committed as 755. If a
+deploy ever stops with *"Please commit your changes or stash them"*, check
+`git status` on the server first.
+
+To force a deploy immediately instead of waiting for the tick:
+```bash
+ssh MSR@100.95.52.74 "wsl -d Ubuntu -e bash /home/msr/SpeedNet-SystemManagement/deploy/auto-deploy.sh"
+```
+
 ## Backups
 
-Two independent mechanisms:
+Three independent mechanisms:
 
 1. **App-level CSV/zip backups (active):** the backend itself writes timestamped
    `backup_*.zip` files continuously (`BACKUP_ENABLED=true` in `.env`). They're
@@ -98,15 +127,31 @@ Two independent mechanisms:
    ```powershell
    Get-ChildItem E:\deploy\backups | Sort-Object LastWriteTime -Descending | Select -First 5
    ```
-2. **`deploy/backup.sh` (pg_dump, NOT currently scheduled):** a second script
-   exists for raw Postgres dumps with retention pruning, but no cron job calls
-   it yet on this box. If you want it running nightly, it needs `BACKUP_DIR`
-   pointed at a *host* path (e.g. `/mnt/e/deploy/pgdumps`) — the `.env` value
-   of `/code/backups` is a container-internal path and won't work for a
-   host-side cron script as-is. Ask if you want this set up.
+2. **`deploy/backup.sh` — nightly `pg_dump` (ACTIVE since 2026-07-24):** runs
+   from cron at **03:00** and writes gzipped SQL dumps to
+   **`/mnt/e/deploy/pgdumps`** = **`E:\deploy\pgdumps`**, keeping 14 days.
+   Log: `/mnt/e/deploy/logs/backup.log`. It writes to a `.part` file and only
+   renames on success, verifies the result is valid gzip *and* contains the
+   core tables, and alerts Telegram if the dump fails — a backup that fails
+   quietly is worse than no backup.
 
-**Copy `E:\deploy\backups` off this machine periodically** — it's a second
-disk on the same box, not offsite.
+   *Note:* the script deliberately reads only `POSTGRES_USER`/`POSTGRES_DB`
+   out of `.env` rather than sourcing it. Sourcing would also import
+   `BACKUP_DIR=/code/backups`, a path that only exists **inside** the backend
+   container, silently redirecting host-side dumps somewhere nobody looks.
+
+3. **`deploy/pull-backups.ps1` — offsite copy to the laptop (run from the
+   laptop).** This is the one that actually makes backups offsite: `E:\deploy`
+   is a second disk in the *same machine*, which is no defence against fire,
+   theft, ransomware or a PSU that takes the drives with it.
+   ```powershell
+   .\deploy\pull-backups.ps1          # pulls new dumps over Tailscale to %USERPROFILE%\SpeedNet-Backups
+   ```
+   Safe to re-run (skips what it already has), prunes to the newest 30, and
+   does nothing harmful if the server is off. The script's footer has the
+   `Register-ScheduledTask` snippet to run it daily.
+
+**Restoring:** `zcat speednet_YYYYMMDD_HHMMSS.sql.gz | docker compose exec -T db psql -U speednet -d speednet`
 
 ## Rotating `SECRET_KEY`
 
@@ -199,6 +244,27 @@ still breaks the site** — check this before assuming an app problem:
 - **Windows Update:** set to notify-only (`AUOptions=2`) with
   `NoAutoRebootWithLoggedOnUsers=1` — it won't silently install updates or
   force a reboot.
+
+## Monitoring, alerts and uptime history
+
+- **Alerting was dead until 2026-07-24** — not a code bug: the server `.env`
+  simply had no `ALERT_*` lines, so `ALERT_ENABLED` defaulted to false and the
+  alert engine returned immediately on every sweep. Both the Telegram channel
+  and the in-app notification bell were empty for that reason.
+  **The server `.env` is not in git and does not track `deploy/env.prod.example`
+  — auto-deploy rebuilds code but never touches it, so any NEW backend setting
+  silently falls back to its `config.py` default in production until someone
+  adds it here.**
+- Telegram goes to the group **"Speed Net Alerts"** via bot `@SpeedNetAlerts_bot`.
+  Admins can verify the channel end-to-end from the console: **🔔 bell →
+  "Send test"**. It reports Telegram's own rejection text, so a bad token or a
+  chat that never messaged the bot is visible instead of looking like a quiet
+  network.
+- **Outage history (`outage_events`)** is recorded independently of alerting.
+  Alerting is throttled on purpose (cooldowns, the mass-outage freeze) and
+  reusing those gates would leave holes in the history. Surfaced at
+  **`/console/uptime`**: per-IP SLA summary and the full outage log.
+- The monitor currently tracks **~1591 IPs**.
 
 ## Known open items (not silently resolved)
 
