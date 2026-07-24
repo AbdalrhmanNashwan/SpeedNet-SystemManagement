@@ -25,14 +25,25 @@ export type OutageItem = {
   ongoing: boolean;
 };
 
-/** Per-IP downtime totals over the last `days`. Only IPs that actually had an
- *  outage come back — everything else was at 100% by definition. */
+export type UptimeResponse = {
+  now: string;
+  days: number;
+  window_seconds: number;
+  /** When outage monitoring first began. Uptime can only be measured from here. */
+  monitoring_since: string;
+  /** True when we have less history than the requested range. */
+  partial_window: boolean;
+  items: UptimeItem[];
+};
+
+/** Per-IP downtime totals over the last `days`, clipped to the time we've
+ *  actually been monitoring. Only IPs that had an outage come back — everything
+ *  else was at 100% by definition. */
 export function useUptime(days: number) {
   return useQuery({
     queryKey: ["uptime", days],
     queryFn: async () =>
-      (await api.get<{ items: UptimeItem[]; window_seconds: number; now: string }>(
-        "/monitor/uptime", { params: { days } })).data,
+      (await api.get<UptimeResponse>("/monitor/uptime", { params: { days } })).data,
     refetchInterval: 60_000,
   });
 }

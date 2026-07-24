@@ -20,6 +20,7 @@ from sqlalchemy import select
 from app.core.config import settings
 from app.db.session import AsyncSessionLocal
 from app.models.outage import OutageEvent
+from app.models.meta import AppMeta
 
 log = logging.getLogger("monitor.outages")
 
@@ -51,13 +52,20 @@ class OutageRecorder:
         Process memory resets on restart but the table doesn't, so without this
         a restart during an outage would orphan the open row forever (it would
         never be closed) and then open a duplicate on the next failure.
+
+        Also records monitoring_since the first time we ever run, so uptime is
+        measured against time we've actually observed.
         """
         async with AsyncSessionLocal() as db:
             rows = (await db.execute(
                 select(OutageEvent.ip, OutageEvent.id)
                 .where(OutageEvent.ended_at.is_(None))
             )).all()
-        self._open = {ip: rid for ip, rid in rows}
+            self._open = {ip: rid for ip, rid in rows}
+            existing = await db.get(AppMeta, "monitoring_since")
+            if existing is None:
+                db.add(AppMeta(key="monitoring_since", value=_now().isoformat()))
+                await db.commit()
         self._loaded = True
         if self._open:
             log.info("outages: resumed %d open outage(s)", len(self._open))

@@ -1,216 +1,231 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { Breadcrumbs } from "@/components/Breadcrumbs";
 import { SortableTh } from "@/components/SortableTh";
 import { useTableSort } from "@/hooks/useTableSort";
-import { useUptime, useOutages, type UptimeItem, type OutageItem } from "@/hooks/useUptime";
+import { useMonitor } from "@/hooks/useMonitor";
+import { useUptime, type UptimeItem } from "@/hooks/useUptime";
 import { useT } from "@/i18n";
 
 type TFn = (s: string, v?: Record<string, string | number>) => string;
 
-/** Compact duration: 2d 3h / 4h 12m / 7m 30s / 45s. */
+/** Compact duration: 45s / 12m / 3h 20m / 2d 4h. */
 function dur(seconds: number, t: TFn): string {
   const s = Math.max(0, Math.round(seconds));
   if (s < 60) return t("{n}s", { n: s });
-  if (s < 3600) return t("{n}m {s}s", { n: Math.floor(s / 60), s: s % 60 });
+  if (s < 3600) return t("{n}m", { n: Math.round(s / 60) });
   if (s < 86400) return t("{n}h {m}m", { n: Math.floor(s / 3600), m: Math.floor((s % 3600) / 60) });
   return t("{n}d {h}h", { n: Math.floor(s / 86400), h: Math.floor((s % 86400) / 3600) });
 }
 
-function when(iso: string | null): string {
-  return iso ? new Date(iso).toLocaleString() : "—";
+function when(iso: string | null, t: TFn): string {
+  if (!iso) return "—";
+  const mins = (Date.now() - new Date(iso).getTime()) / 60000;
+  if (mins < 1) return t("just now");
+  if (mins < 60) return t("{n}m ago", { n: Math.floor(mins) });
+  if (mins < 1440) return t("{n}h ago", { n: Math.floor(mins / 60) });
+  return new Date(iso).toLocaleDateString();
 }
 
-/** Colour the SLA figure by how bad it is — 99.9% and 82% shouldn't look alike. */
-function pctClass(p: number): string {
-  if (p >= 99.9) return "text-green";
-  if (p >= 99) return "text-text";
-  if (p >= 95) return "text-yellow";
-  return "text-red";
+/** availability tint: 99.9 green, 99 text, 95 amber, below that red */
+function pctTone(p: number) {
+  if (p >= 99.9) return { text: "text-green", bar: "var(--green,#34d399)" };
+  if (p >= 99) return { text: "text-text", bar: "var(--cyan,#22d3ee)" };
+  if (p >= 95) return { text: "text-amber", bar: "var(--amber,#fbbf24)" };
+  return { text: "text-red", bar: "var(--red,#fb7185)" };
 }
 
-function towerLink(towerId: number | null, name: string | null, t: TFn) {
-  if (towerId == null) return <span className="text-muted2">{name ?? t("—")}</span>;
+function towerLink(id: number | null, name: string | null, t: TFn) {
+  if (id == null) return <span className="text-muted2">{name ?? t("Unassigned")}</span>;
+  return <Link to={`/tower/${id}`} className="text-cyan hover:underline">{name ?? t("Tower #{id}", { id })}</Link>;
+}
+
+/** Thin uptime bar — green fill = uptime, red remainder = downtime. */
+function UptimeBar({ pct }: { pct: number }) {
+  const tone = pctTone(pct);
   return (
-    <Link to={`/tower/${towerId}`} className="text-cyan hover:underline">
-      {name ?? t("Tower #{id}", { id: towerId })}
-    </Link>
+    <div className="flex items-center gap-2">
+      <div className="relative h-1.5 w-24 rounded-full bg-red/25 overflow-hidden">
+        <div className="absolute inset-y-0 start-0 rounded-full"
+          style={{ width: `${Math.max(0, Math.min(100, pct))}%`, background: tone.bar }} />
+      </div>
+      <span className={`font-mono text-[11.5px] font-semibold tabular-nums ${tone.text}`}>
+        {pct.toFixed(pct >= 99.9 ? 3 : pct >= 95 ? 2 : 1)}%
+      </span>
+    </div>
   );
 }
 
-const UPTIME_ACCESSORS = {
+function Kpi({ label, value, sub, tone }: { label: string; value: string; sub?: string; tone?: string }) {
+  return (
+    <div className="card px-5 py-4">
+      <div className={`text-[26px] leading-none font-semibold ${tone ?? ""}`}>{value}</div>
+      <div className="text-[10px] uppercase tracking-[0.15em] text-muted2 font-semibold mt-2">{label}</div>
+      {sub && <div className="text-[11px] text-muted mt-1">{sub}</div>}
+    </div>
+  );
+}
+
+const ACCESSORS = {
   ip: (r: UptimeItem) => r.ip,
   tower_name: (r: UptimeItem) => r.tower_name,
-  outages: (r: UptimeItem) => r.outages,
-  downtime_seconds: (r: UptimeItem) => r.downtime_seconds,
   uptime_pct: (r: UptimeItem) => r.uptime_pct,
+  downtime_seconds: (r: UptimeItem) => r.downtime_seconds,
+  outages: (r: UptimeItem) => r.outages,
   last_outage_at: (r: UptimeItem) => r.last_outage_at,
 };
 
-const OUTAGE_ACCESSORS = {
-  ip: (r: OutageItem) => r.ip,
-  tower_name: (r: OutageItem) => r.tower_name,
-  started_at: (r: OutageItem) => r.started_at,
-  ended_at: (r: OutageItem) => r.ended_at,
-  duration_seconds: (r: OutageItem) => r.duration_seconds,
-};
+const RANGES = [1, 7, 30] as const;
 
-const RANGES = [7, 30, 90] as const;
-
-/** Uptime / downtime reporting from the durable outage history. */
+/** Uptime & outage reporting, from the durable outage history. */
 export default function Uptime() {
   const t = useT();
-  const [days, setDays] = useState<number>(30);
-  const { data: up, isLoading: loadingUp } = useUptime(days);
-  const { data: out, isLoading: loadingOut } = useOutages(days);
-  const [tab, setTab] = useState<"summary" | "events">("summary");
+  const [days, setDays] = useState<number>(1);
+  const { data, isLoading } = useUptime(days);
+  const monitor = useMonitor();
 
-  const summary = useTableSort(up?.items ?? [], {
+  const items = data?.items ?? [];
+  const window = data?.window_seconds ?? days * 86400;
+  const fleet = monitor.data?.total ?? 0;
+
+  const totalDown = items.reduce((n, i) => n + i.downtime_seconds, 0);
+  const totalOutages = items.reduce((n, i) => n + i.outages, 0);
+  const ongoing = items.filter((i) => i.ongoing);
+
+  // Fleet availability: total observed downtime over (window × every monitored
+  // IP). Falls back to the mean of affected IPs if the fleet size hasn't loaded.
+  const availability = useMemo(() => {
+    if (fleet > 0 && window > 0) return Math.max(0, 100 * (1 - totalDown / (window * fleet)));
+    if (items.length === 0) return 100;
+    return items.reduce((n, i) => n + i.uptime_pct, 0) / items.length;
+  }, [fleet, window, totalDown, items]);
+
+  // Currently-down IPs grouped by tower — one problem per tower, not per device.
+  const downByTower = useMemo(() => {
+    const m = new Map<string, { id: number | null; name: string | null; count: number; longest: number }>();
+    for (const i of ongoing) {
+      const key = i.tower_id != null ? `t${i.tower_id}` : `n:${i.tower_name ?? ""}`;
+      const g = m.get(key) ?? { id: i.tower_id, name: i.tower_name, count: 0, longest: 0 };
+      g.count += 1;
+      g.longest = Math.max(g.longest, i.downtime_seconds);
+      m.set(key, g);
+    }
+    return [...m.values()].sort((a, b) => b.count - a.count || b.longest - a.longest);
+  }, [ongoing]);
+
+  const table = useTableSort(items, {
     initial: { key: "downtime_seconds", dir: "desc" },
-    accessors: UPTIME_ACCESSORS,
-  });
-  const events = useTableSort(out?.outages ?? [], {
-    initial: { key: "started_at", dir: "desc" },
-    accessors: OUTAGE_ACCESSORS,
+    accessors: ACCESSORS,
   });
 
-  const totalDown = (up?.items ?? []).reduce((n, i) => n + i.downtime_seconds, 0);
-  const ongoing = (up?.items ?? []).filter((i) => i.ongoing).length;
+  const avTone = pctTone(availability);
+  const sinceLabel = data ? new Date(data.monitoring_since).toLocaleString() : "";
 
   return (
     <main className="max-w-6xl mx-auto px-4 sm:px-6 py-10">
       <Breadcrumbs items={[{ label: t("Home"), to: "/", icon: "🏠" }, { label: t("Uptime"), icon: "📈" }]} />
-      <div className="flex items-center gap-3 mb-6 flex-wrap">
-        <span className="text-4xl">📈</span>
+
+      <div className="flex items-start gap-3 mb-6 flex-wrap">
         <div>
-          <h1 className="text-2xl font-extrabold">{t("Uptime & Outages")}</h1>
-          <p className="text-muted text-sm">
-            {t("Recorded outage history — survives restarts, unlike the live monitor.")}
+          <h1 className="text-2xl font-semibold">{t("Uptime & Outages")}</h1>
+          <p className="text-muted text-sm mt-1">
+            {data?.partial_window
+              ? t("Only {w} of history so far · monitoring since {since}",
+                  { w: dur(window, t), since: sinceLabel })
+              : t("Measured over the last {w}", { w: dur(window, t) })}
           </p>
         </div>
-        <div className="ms-auto flex gap-2">
+        <div className="ms-auto inline-flex rounded-lg border border-line overflow-hidden">
           {RANGES.map((d) => (
             <button key={d} onClick={() => setDays(d)}
-              className={`text-xs font-bold px-3 py-1.5 rounded-lg border ${
-                days === d ? "border-blue bg-panel2 text-text" : "border-line text-muted hover:text-text"
-              }`}>
-              {t("{n}d", { n: d })}
+              className={`text-xs font-semibold px-3.5 py-1.5 ${
+                days === d ? "bg-panel2 text-text" : "text-muted hover:text-text"
+              } ${d !== RANGES[0] ? "border-s border-line" : ""}`}>
+              {d === 1 ? t("24h") : t("{n}d", { n: d })}
             </button>
           ))}
         </div>
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
-        <div className="card px-5 py-3">
-          <div className="text-2xl font-extrabold">{up?.items.length ?? 0}</div>
-          <div className="text-[10px] uppercase tracking-wide text-muted2 font-bold">{t("IPs with outages")}</div>
-        </div>
-        <div className="card px-5 py-3">
-          <div className="text-2xl font-extrabold">{out?.outages.length ?? 0}</div>
-          <div className="text-[10px] uppercase tracking-wide text-muted2 font-bold">{t("Outages recorded")}</div>
-        </div>
-        <div className="card px-5 py-3">
-          <div className="text-2xl font-extrabold">{dur(totalDown, t)}</div>
-          <div className="text-[10px] uppercase tracking-wide text-muted2 font-bold">{t("Total downtime")}</div>
-        </div>
-        <div className="card px-5 py-3">
-          <div className={`text-2xl font-extrabold ${ongoing ? "text-red" : "text-green"}`}>{ongoing}</div>
-          <div className="text-[10px] uppercase tracking-wide text-muted2 font-bold">{t("Still down")}</div>
-        </div>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-8">
+        <Kpi label={t("Availability")} value={`${availability.toFixed(availability >= 99.9 ? 3 : 2)}%`}
+          tone={avTone.text} sub={fleet ? t("across {n} IPs", { n: fleet }) : undefined} />
+        <Kpi label={t("Down right now")} value={String(ongoing.length)}
+          tone={ongoing.length ? "text-red" : "text-green"}
+          sub={ongoing.length ? t("on {n} towers", { n: downByTower.length }) : t("all clear")} />
+        <Kpi label={t("Outages")} value={String(totalOutages)} sub={t("in this period")} />
+        <Kpi label={t("Total downtime")} value={dur(totalDown, t)} sub={t("summed across all IPs")} />
       </div>
 
-      <div className="flex items-center gap-2 mb-4">
-        {([["summary", t("By IP")], ["events", t("Every outage")]] as const).map(([k, label]) => (
-          <button key={k} onClick={() => setTab(k)}
-            className={`text-xs font-bold px-3 py-1.5 rounded-lg border ${
-              tab === k ? "border-blue bg-panel2 text-text" : "border-line text-muted hover:text-text"
-            }`}>
-            {label}
-          </button>
-        ))}
-      </div>
+      {/* Currently down — the actionable part, grouped so a tower with 20 dead
+          devices reads as one problem, not twenty. */}
+      {ongoing.length > 0 && (
+        <section className="mb-8">
+          <div className="flex items-center gap-2 mb-3">
+            <span className="w-2 h-2 rounded-full bg-red animate-pulse" />
+            <h2 className="text-sm font-semibold">{t("Currently down")}</h2>
+            <span className="text-xs text-muted2">{t("{n} IPs on {t} towers", { n: ongoing.length, t: downByTower.length })}</span>
+          </div>
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+            {downByTower.map((g, i) => (
+              <div key={i} className="card px-4 py-3 flex items-center gap-3 border-s-2 border-s-red">
+                <div className="min-w-0 flex-1">
+                  <div className="text-sm font-medium truncate">{towerLink(g.id, g.name, t)}</div>
+                  <div className="text-[11px] text-muted2 mt-0.5">
+                    {t("longest down {d}", { d: dur(g.longest, t) })}
+                  </div>
+                </div>
+                <div className="text-lg font-semibold text-red tabular-nums shrink-0">{g.count}</div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
-      {tab === "summary" ? (
-        loadingUp ? <div className="text-muted">{t("Loading…")}</div>
-        : summary.sorted.length === 0 ? (
-          <div className="card p-10 text-center text-muted2">
-            {t("No outages recorded in this period. Everything has been up.")}
-          </div>
-        ) : (
-          <div className="border border-line rounded-[13px] overflow-auto max-h-[70vh]">
-            <table className="w-full border-collapse text-[12.5px]">
-              <thead>
-                <tr>
-                  {([["IP", "ip"], ["Tower", "tower_name"], ["Uptime", "uptime_pct"],
-                     ["Downtime", "downtime_seconds"], ["Outages", "outages"],
-                     ["Last outage", "last_outage_at"]] as const).map(([label, key]) => (
-                    <SortableTh key={key} label={t(label)} sortKey={key}
-                      sort={summary.sort} onSort={summary.toggle} />
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {summary.sorted.map((r) => (
-                  <tr key={r.ip} className="border-b border-line/50">
-                    <td className="px-3 py-2 font-mono">
-                      {r.ip}
-                      {r.ongoing && (
-                        <span className="ms-2 text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded bg-red/15 text-red">
-                          {t("down now")}
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-3 py-2">{towerLink(r.tower_id, r.tower_name, t)}</td>
-                    <td className={`px-3 py-2 font-mono font-bold ${pctClass(r.uptime_pct)}`}>
-                      {r.uptime_pct.toFixed(3)}%
-                    </td>
-                    <td className="px-3 py-2 text-muted whitespace-nowrap">{dur(r.downtime_seconds, t)}</td>
-                    <td className="px-3 py-2 text-muted2">{r.outages}</td>
-                    <td className="px-3 py-2 text-muted2 whitespace-nowrap">{when(r.last_outage_at)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )
+      {/* Full per-IP breakdown */}
+      <h2 className="text-sm font-semibold mb-3">{t("By device")}</h2>
+      {isLoading ? (
+        <div className="text-muted">{t("Loading…")}</div>
+      ) : items.length === 0 ? (
+        <div className="card p-12 text-center">
+          <div className="text-3xl mb-2">✓</div>
+          <div className="text-muted">{t("No outages recorded in this period. Everything has been up.")}</div>
+        </div>
       ) : (
-        loadingOut ? <div className="text-muted">{t("Loading…")}</div>
-        : events.sorted.length === 0 ? (
-          <div className="card p-10 text-center text-muted2">
-            {t("No outages recorded in this period. Everything has been up.")}
-          </div>
-        ) : (
-          <div className="border border-line rounded-[13px] overflow-auto max-h-[70vh]">
-            <table className="w-full border-collapse text-[12.5px]">
-              <thead>
-                <tr>
-                  {([["IP", "ip"], ["Tower", "tower_name"], ["Went down", "started_at"],
-                     ["Came back", "ended_at"], ["Duration", "duration_seconds"]] as const).map(([label, key]) => (
-                    <SortableTh key={key} label={t(label)} sortKey={key}
-                      sort={events.sort} onSort={events.toggle} />
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {events.sorted.map((o) => (
-                  <tr key={o.id} className="border-b border-line/50">
-                    <td className="px-3 py-2 font-mono">{o.ip}</td>
-                    <td className="px-3 py-2">{towerLink(o.tower_id, o.tower_name, t)}</td>
-                    <td className="px-3 py-2 text-muted2 whitespace-nowrap">{when(o.started_at)}</td>
-                    <td className="px-3 py-2 whitespace-nowrap">
-                      {o.ongoing
-                        ? <span className="text-red font-bold">{t("still down")}</span>
-                        : <span className="text-muted2">{when(o.ended_at)}</span>}
-                    </td>
-                    <td className={`px-3 py-2 whitespace-nowrap ${o.ongoing ? "text-red font-semibold" : "text-muted"}`}>
-                      {dur(o.duration_seconds, t)}
-                    </td>
-                  </tr>
+        <div className="border border-line rounded-[13px] overflow-auto max-h-[70vh]">
+          <table className="w-full border-collapse text-[12.5px]">
+            <thead>
+              <tr>
+                {([["IP", "ip"], ["Tower", "tower_name"], ["Uptime", "uptime_pct"],
+                   ["Downtime", "downtime_seconds"], ["Outages", "outages"],
+                   ["Last outage", "last_outage_at"]] as const).map(([label, key]) => (
+                  <SortableTh key={key} label={t(label)} sortKey={key}
+                    sort={table.sort} onSort={table.toggle} />
                 ))}
-              </tbody>
-            </table>
-          </div>
-        )
+              </tr>
+            </thead>
+            <tbody>
+              {table.sorted.map((r) => (
+                <tr key={r.ip} className="border-b border-line/50 hover:bg-panel2/40">
+                  <td className="px-3 py-2 font-mono whitespace-nowrap">
+                    {r.ongoing && <span className="inline-block w-1.5 h-1.5 rounded-full bg-red me-2 align-middle" />}
+                    {r.ip}
+                  </td>
+                  <td className="px-3 py-2">
+                    {towerLink(r.tower_id, r.tower_name, t)}
+                    {r.label && <span className="text-muted2 text-[11px] ms-1.5">· {r.label}</span>}
+                  </td>
+                  <td className="px-3 py-2"><UptimeBar pct={r.uptime_pct} /></td>
+                  <td className={`px-3 py-2 whitespace-nowrap ${r.ongoing ? "text-red" : "text-muted"}`}>
+                    {dur(r.downtime_seconds, t)}
+                  </td>
+                  <td className="px-3 py-2 text-muted2">{r.outages}</td>
+                  <td className="px-3 py-2 text-muted2 whitespace-nowrap">{when(r.last_outage_at, t)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
     </main>
   );

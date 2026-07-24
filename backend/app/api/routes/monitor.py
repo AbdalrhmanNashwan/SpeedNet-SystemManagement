@@ -242,23 +242,37 @@ async def uptime(
 ):
     """Per-IP downtime totals over the window, worst first.
 
-    Uptime % is measured against the window length, and outages are clipped to
-    the window so one long outage that predates it can't push a figure below
-    0%. Only IPs that actually had an outage appear — everything else was at
-    100% by definition.
+    The window is the OVERLAP of the requested period and the time we've
+    actually been monitoring — you can't have "30 days uptime" from 16 hours of
+    data. Measuring against a fixed 30 days made a device that was down the
+    whole time we watched it read as ~98% up. Outages are clipped to that
+    window so one predating it can't push a figure below 0%. Only IPs that had
+    an outage appear; everything else was 100% by definition.
     """
     from datetime import timedelta
     from sqlalchemy import or_
     from app.models.outage import OutageEvent
+    from app.models.meta import AppMeta
 
     days = max(1, min(days, 365))
     now = datetime.now(timezone.utc)
-    since = now - timedelta(days=days)
-    window = days * 86400.0
+    requested_start = now - timedelta(days=days)
+
+    meta = await db.get(AppMeta, "monitoring_since")
+    monitoring_since = requested_start
+    if meta and meta.value:
+        try:
+            monitoring_since = datetime.fromisoformat(meta.value)
+        except ValueError:
+            pass
+
+    # The honest denominator: we can only speak for the observed window.
+    effective_start = max(requested_start, monitoring_since)
+    window = max(1.0, (now - effective_start).total_seconds())
 
     q = select(OutageEvent).where(
-        or_(OutageEvent.started_at >= since, OutageEvent.ended_at.is_(None),
-            OutageEvent.ended_at >= since)
+        or_(OutageEvent.started_at >= effective_start, OutageEvent.ended_at.is_(None),
+            OutageEvent.ended_at >= effective_start)
     )
     if user.role == "agent":
         q = q.where(OutageEvent.tower_id.in_(await _agent_tower_ids(db, user)))
@@ -266,7 +280,7 @@ async def uptime(
 
     agg: dict[str, dict] = {}
     for o in rows:
-        start = max(o.started_at, since)
+        start = max(o.started_at, effective_start)
         end = min(o.ended_at or now, now)
         secs = max(0.0, (end - start).total_seconds())
         a = agg.setdefault(o.ip, {
@@ -284,12 +298,23 @@ async def uptime(
     items = []
     for a in agg.values():
         a["downtime_seconds"] = int(a["downtime_seconds"])
-        a["uptime_pct"] = round(max(0.0, 100.0 * (1 - a["downtime_seconds"] / window)), 4)
+        # Clamp downtime to the window: an ongoing outage that began before it
+        # would otherwise total more seconds than the window and read negative.
+        dt = min(a["downtime_seconds"], window)
+        a["uptime_pct"] = round(max(0.0, 100.0 * (1 - dt / window)), 4)
         items.append(a)
     items.sort(key=lambda x: x["downtime_seconds"], reverse=True)
 
-    return {"now": now.isoformat(), "days": days, "window_seconds": int(window),
-            "items": items}
+    return {
+        "now": now.isoformat(),
+        "days": days,
+        "window_seconds": int(window),
+        "monitoring_since": monitoring_since.isoformat(),
+        # True when we have less history than the requested window, so the UI
+        # can say "13h of data" instead of implying a full 30 days.
+        "partial_window": monitoring_since > requested_start,
+        "items": items,
+    }
 
 
 @router.post("/alerts/test")
